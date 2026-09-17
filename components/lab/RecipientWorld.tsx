@@ -119,9 +119,12 @@ function AngleWorld({ engaged }: { engaged: boolean }) {
 }
 
 function SignalWorld({ engaged }: { engaged: boolean }) {
-  const packetRefs = [useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null)];
+  const packet0 = useRef<THREE.Mesh>(null);
+  const packet1 = useRef<THREE.Mesh>(null);
+  const packet2 = useRef<THREE.Mesh>(null);
+
   useFrame(({ clock }) => {
-    packetRefs.forEach((ref, index) => {
+    [packet0, packet1, packet2].forEach((ref, index) => {
       if (!ref.current) return;
       const raw = (clock.elapsedTime * 0.24 + index * 0.31) % 1;
       const travel = engaged ? raw : Math.min(raw, 0.58);
@@ -131,12 +134,15 @@ function SignalWorld({ engaged }: { engaged: boolean }) {
       material.opacity = raw < 0.08 ? raw / 0.08 : raw > 0.92 ? (1 - raw) / 0.08 : 0.86;
     });
   });
+
   return (
     <group>
       <Node x={-1.3} alive />
       <Node x={1.3} alive={engaged} />
       <mesh position={[0, 0.25, -0.02]}><boxGeometry args={[2.25, 0.012, 0.012]} /><meshBasicMaterial color={engaged ? coral : "#9f958e"} transparent opacity={engaged ? 0.25 : 0.1} /></mesh>
-      {packetRefs.map((ref, index) => <mesh key={index} ref={ref}><sphereGeometry args={[0.034 + index * 0.007, 18, 18]} /><meshBasicMaterial color={index === 1 ? amber : coral} transparent opacity={0.8} /></mesh>)}
+      <mesh ref={packet0}><sphereGeometry args={[0.034, 18, 18]} /><meshBasicMaterial color={coral} transparent opacity={0.8} /></mesh>
+      <mesh ref={packet1}><sphereGeometry args={[0.041, 18, 18]} /><meshBasicMaterial color={amber} transparent opacity={0.8} /></mesh>
+      <mesh ref={packet2}><sphereGeometry args={[0.048, 18, 18]} /><meshBasicMaterial color={coral} transparent opacity={0.8} /></mesh>
     </group>
   );
 }
@@ -237,7 +243,6 @@ function Dust({ warm }: { warm: boolean }) {
 
 export function RecipientWorld({ scene, engaged, named }: Props) {
   const root = useRef<THREE.Group>(null);
-  const camera = useThree((state) => state.camera);
   const viewportWidth = useThree((state) => state.viewport.width);
   const narrow = viewportWidth < 3.5;
   const warm = ["third", "reveal", "name", "choice", "ninetyone", "ninetysix"].includes(scene);
@@ -249,6 +254,7 @@ export function RecipientWorld({ scene, engaged, named }: Props) {
     const close = ["third", "reveal", "name", "choice", "ninetyone", "ninetysix"].includes(scene);
     cameraTarget.set(0, close ? 0.9 : 1.08, narrow ? (close ? 6.2 : 6.75) : (close ? 4.65 : 5.4));
     lookTarget.set(0, 0.22, 0);
+    const camera = state.camera;
     camera.position.x = damp(camera.position.x, cameraTarget.x, 2.7, delta);
     camera.position.y = damp(camera.position.y, cameraTarget.y, 2.7, delta);
     camera.position.z = damp(camera.position.z, cameraTarget.z, 2.7, delta);
