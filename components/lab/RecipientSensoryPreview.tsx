@@ -7,6 +7,7 @@ import { SensoryLabWorld, type SensoryScene } from "@/components/lab/SensoryLabW
 import { createSensorySoundscape } from "@/lib/client/sensory-sonic";
 
 const ORDER: SensoryScene[] = ["object", "gap", "angle", "signal", "third", "reveal", "name", "choice", "ninetyone"];
+const LAB_SCENES: SensoryScene[] = [...ORDER, "ninetysix", "unchanged"];
 
 const COPY: Partial<Record<SensoryScene, { kicker: string; title: string; body?: string; whisper?: string }>> = {
   object: { kicker: "FIELD OBJECT / 001", title: "OBJECT 001", body: "touch to wake" },
@@ -246,7 +247,7 @@ export function RecipientSensoryPreview() {
         <aside className="lab-drawer">
           <p>sensory lab · local only · no backend</p>
           <div className="lab-grid">
-            {[...ORDER,"ninetysix","unchanged"].map((item) => <button key={item} type="button" data-active={scene === item} onClick={() => { if (item === "name" && !nameDraft) setNameDraft("YASMEEN"); go(item); }}>{item === "ninetyone" ? "91%" : item === "ninetysix" ? "96%" : item}</button>)}
+            {LAB_SCENES.map((item) => <button key={item} type="button" data-active={scene === item} onClick={() => { if (item === "name" && !nameDraft) setNameDraft("YASMEEN"); go(item); }}>{item === "ninetyone" ? "91%" : item === "ninetysix" ? "96%" : item}</button>)}
           </div>
         </aside>
       )}
