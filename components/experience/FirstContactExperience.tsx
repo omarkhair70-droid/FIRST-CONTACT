@@ -21,14 +21,19 @@ export function FirstContactExperience() {
   const copyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (mode.kind !== "intro") return;
-    const timers = INTRO_SEQUENCE.slice(1).map(({ stage, at }) => window.setTimeout(() => setMode({ kind: "intro", stage }), at));
+    const timers = INTRO_SEQUENCE.slice(1).map(({ stage, at }) =>
+      window.setTimeout(() => setMode({ kind: "intro", stage }), at),
+    );
     return () => timers.forEach(window.clearTimeout);
   }, []);
 
   useEffect(() => {
     if (!copyRef.current) return;
-    gsap.fromTo(copyRef.current, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.65, ease: "power2.out", overwrite: true });
+    gsap.fromTo(
+      copyRef.current,
+      { opacity: 0, y: 8 },
+      { opacity: 1, y: 0, duration: 0.65, ease: "power2.out", overwrite: true },
+    );
   }, [mode]);
 
   const stage: IntroStage = mode.kind === "intro" ? mode.stage : "inspect";
@@ -58,12 +63,18 @@ export function FirstContactExperience() {
     if (mode.kind === "reveal") return "That wasn't the point.";
     if (mode.kind === "explore") return activeCopy?.label ?? "NODE O";
     switch (mode.stage) {
-      case "object": return "OBJECT 001";
-      case "context": return "establishing context";
-      case "world": return "HELLO:// ENCOUNTER 001";
-      case "metrics": return "PROXIMITY HIGH";
-      case "problem": return "This appears to be a design problem.";
-      case "inspect": return "inspect node O";
+      case "object":
+        return "OBJECT 001";
+      case "context":
+        return "establishing context";
+      case "world":
+        return "HELLO:// ENCOUNTER 001";
+      case "metrics":
+        return "PROXIMITY HIGH";
+      case "problem":
+        return "This appears to be a design problem.";
+      case "inspect":
+        return "inspect node O";
     }
   }, [activeCopy, mode]);
 
@@ -76,25 +87,52 @@ export function FirstContactExperience() {
       </header>
 
       <section className="canvas-wrap" aria-label="Interactive first contact world">
-        <Canvas camera={{ position: [0, 2.45, 7.2], fov: 37 }} dpr={[1, 1.6]} gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}>
+        <Canvas
+          camera={{ position: [0, 2.45, 7.2], fov: 37 }}
+          dpr={[1, 1.6]}
+          gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        >
           <ambientLight intensity={1.65} />
           <directionalLight position={[4, 7, 5]} intensity={2.4} color="#fff9eb" />
           <directionalLight position={[-4, 2, -2]} intensity={0.55} color="#b9c0c5" />
-          <World stage={stage} exploring={exploring} activeSpace={activeSpace} visited={visited} onInspectO={inspectO} onSelectSpace={selectSpace} />
+          <World
+            stage={stage}
+            exploring={exploring}
+            activeSpace={activeSpace}
+            visited={visited}
+            onInspectO={inspectO}
+            onSelectSpace={selectSpace}
+          />
         </Canvas>
       </section>
 
-      <section className="narrative" ref={copyRef} key={`${mode.kind}-${mode.kind === "intro" ? mode.stage : activeSpace ?? "root"}`}>
+      <section
+        className="narrative"
+        ref={copyRef}
+        key={`${mode.kind}-${mode.kind === "intro" ? mode.stage : activeSpace ?? "root"}`}
+      >
         <p className="eyebrow">
-          {mode.kind === "explore" ? (activeCopy?.code ?? `${visited.length}/4 DISCOVERED`) : mode.kind === "reveal" ? "IDENTITY / SOURCE" : "FIRST CONTACT PROTOCOL"}
+          {mode.kind === "explore"
+            ? activeCopy?.code ?? `${visited.length}/4 DISCOVERED`
+            : mode.kind === "reveal"
+              ? "IDENTITY / SOURCE"
+              : "FIRST CONTACT PROTOCOL"}
         </p>
         <h1>{headline}</h1>
 
-        {mode.kind === "intro" && mode.stage === "metrics" && <p className="support">INTRODUCTIONS <strong>0</strong></p>}
-        {mode.kind === "intro" && mode.stage === "inspect" && <p className="support">Touch the dark node. The rest is not a menu.</p>}
+        {mode.kind === "intro" && mode.stage === "metrics" && (
+          <p className="support">
+            INTRODUCTIONS <strong>0</strong>
+          </p>
+        )}
+        {mode.kind === "intro" && mode.stage === "inspect" && (
+          <p className="support">Touch the dark node. The rest is not a menu.</p>
+        )}
 
         {mode.kind === "explore" && activeCopy && <p className="support wide">{activeCopy.line}</p>}
-        {mode.kind === "explore" && !activeCopy && <p className="support wide">Four fragments. Pick any two. Curiosity should do the rest.</p>}
+        {mode.kind === "explore" && !activeCopy && (
+          <p className="support wide">Four fragments. Pick any two. Curiosity should do the rest.</p>
+        )}
 
         {canReveal && (
           <button className="quiet-action" type="button" onClick={() => setMode({ kind: "reveal" })}>
@@ -105,10 +143,16 @@ export function FirstContactExperience() {
         {mode.kind === "reveal" && (
           <div className="reveal-copy">
             <p>Okay. This accidentally became a portfolio.</p>
-            <p className="arabic" dir="rtl">أنا عمر، جارك. وكان ممكن أقول هاي زي بني آدم طبيعي.</p>
-            <p className="arabic muted" dir="rtl">بس للأسف دي كانت هتبقى طريقة مملة جدًا.</p>
+            <p className="arabic" dir="rtl">
+              أنا عمر، جارك. وكان ممكن أقول هاي زي بني آدم طبيعي.
+            </p>
+            <p className="arabic muted" dir="rtl">
+              بس للأسف دي كانت هتبقى طريقة مملة جدًا.
+            </p>
             <div className="reveal-nodes" aria-label="Connection state">
-              <span>OMAR</span><i /><span>?</span>
+              <span>OMAR</span>
+              <i />
+              <span>?</span>
             </div>
             <p className="tiny">NEXT: IDENTIFY NODE / CONSENT / BRIDGE</p>
           </div>
@@ -117,7 +161,13 @@ export function FirstContactExperience() {
 
       <footer className="system-footer">
         <span>OBJECT 001</span>
-        <span>{mode.kind === "reveal" ? "SOURCE REVEALED" : mode.kind === "explore" ? `${visited.length}/4` : stage.toUpperCase()}</span>
+        <span>
+          {mode.kind === "reveal"
+            ? "SOURCE REVEALED"
+            : mode.kind === "explore"
+              ? `${visited.length}/4`
+              : stage.toUpperCase()}
+        </span>
       </footer>
     </main>
   );
