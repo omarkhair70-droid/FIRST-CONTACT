@@ -195,11 +195,14 @@ function AngleWorld({ active }: { active: boolean }) {
 }
 
 function SignalWorld({ active }: { active: boolean }) {
-  const packets = [useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null)];
+  const packet0 = useRef<THREE.Mesh>(null);
+  const packet1 = useRef<THREE.Mesh>(null);
+  const packet2 = useRef<THREE.Mesh>(null);
+
   useFrame(({ clock }) => {
-    packets.forEach((packet, index) => {
+    [packet0, packet1, packet2].forEach((packet, index) => {
       if (!packet.current) return;
-      const phase = (clock.elapsedTime * 0.42 + index / packets.length) % 1;
+      const phase = (clock.elapsedTime * 0.42 + index / 3) % 1;
       const travel = active ? phase : Math.min(phase, 0.43);
       packet.current.position.x = -0.34 + travel * 0.68;
       packet.current.scale.setScalar(0.7 + Math.sin(phase * Math.PI) * 0.45);
@@ -211,9 +214,9 @@ function SignalWorld({ active }: { active: boolean }) {
       <mesh position={[-0.38, 0, 0]}><sphereGeometry args={[0.09, 24, 24]} /><meshStandardMaterial color={ink} emissive={signal} emissiveIntensity={0.16} /></mesh>
       <mesh position={[0.38, 0, 0]}><sphereGeometry args={[0.09, 24, 24]} /><meshStandardMaterial color={graphite} emissive={active ? signal : "#000"} emissiveIntensity={active ? 0.16 : 0} /></mesh>
       <mesh scale={[0.72, 0.014, 0.014]}><boxGeometry /><meshBasicMaterial color={graphite} transparent opacity={0.18} /></mesh>
-      {packets.map((packet, index) => (
-        <mesh key={index} ref={packet}><sphereGeometry args={[0.026, 14, 14]} /><meshBasicMaterial color={active ? signal : graphite} transparent opacity={active ? 0.9 : 0.42} /></mesh>
-      ))}
+      <mesh ref={packet0}><sphereGeometry args={[0.026, 14, 14]} /><meshBasicMaterial color={active ? signal : graphite} transparent opacity={active ? 0.9 : 0.42} /></mesh>
+      <mesh ref={packet1}><sphereGeometry args={[0.026, 14, 14]} /><meshBasicMaterial color={active ? signal : graphite} transparent opacity={active ? 0.9 : 0.42} /></mesh>
+      <mesh ref={packet2}><sphereGeometry args={[0.026, 14, 14]} /><meshBasicMaterial color={active ? signal : graphite} transparent opacity={active ? 0.9 : 0.42} /></mesh>
       <mesh position={[-0.38, 0, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.18, 0.012, 10, 48]} /><meshBasicMaterial color={signal} transparent opacity={0.3} /></mesh>
     </group>
   );
@@ -315,7 +318,6 @@ function ExplorationWorld({ activeSpace, visited, onSelectSpace }: { activeSpace
 export function World({ stage, exploring, postReveal, bridgeProgress, activeSpace, visited, onInspectO, onSelectSpace }: WorldProps) {
   const root = useRef<THREE.Group>(null);
   const architecture = useRef<THREE.Group>(null);
-  const camera = useThree((state) => state.camera);
   const viewportWidth = useThree((state) => state.viewport.width);
   const isNarrow = viewportWidth < 3.5;
   const fitScale = isNarrow ? Math.max(0.44, Math.min(0.62, viewportWidth / 4.8)) : 1;
@@ -345,6 +347,7 @@ export function World({ stage, exploring, postReveal, bridgeProgress, activeSpac
       lookTarget.set(0, 0.18, 0);
     }
 
+    const camera = state.camera;
     camera.position.x = damp(camera.position.x, cameraTarget.x, 2.5, delta);
     camera.position.y = damp(camera.position.y, cameraTarget.y, 2.5, delta);
     camera.position.z = damp(camera.position.z, cameraTarget.z, 2.5, delta);
