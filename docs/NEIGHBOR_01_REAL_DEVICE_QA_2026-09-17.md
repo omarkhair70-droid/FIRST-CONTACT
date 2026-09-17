@@ -4,6 +4,18 @@ This is the final pre-merge gate for the first real OBJECT 001 deployment.
 
 The creative branch is allowed to remain a lab until every recipient-facing item below passes. Do not merge merely because CI is green.
 
+## Current closure status — 2026-09-17
+
+Automated branch verification is green:
+- GitHub CI lint: PASS
+- GitHub CI build: PASS
+- recipient root is the sensory encounter, not the legacy experience
+- signed response persistence is wired only when a valid `?t=` token is present
+- backend-free lab routes remain available separately
+- OBJECT 001 fabrication lab and 1:1 print sheet are committed
+
+Vercel's most recent READY preview predates the final persistence / print / QA commits because the project hit a build-rate limit during the rapid commit sequence. This commit intentionally requests one fresh closure preview after the rate-limit window. Do not treat an older READY deployment as visual proof of the latest branch head.
+
 ## A. Recipient route — no token / preview behavior
 
 Open the creative branch root without `?t=`.
