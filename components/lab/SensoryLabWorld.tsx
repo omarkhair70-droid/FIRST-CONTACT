@@ -155,9 +155,12 @@ function AngleWorld({ active }: { active: boolean }) {
 }
 
 function SignalWorld({ active }: { active: boolean }) {
-  const packets = [useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null)];
+  const packet0 = useRef<THREE.Mesh>(null);
+  const packet1 = useRef<THREE.Mesh>(null);
+  const packet2 = useRef<THREE.Mesh>(null);
+
   useFrame(({ clock }) => {
-    packets.forEach((ref, i) => {
+    [packet0, packet1, packet2].forEach((ref, i) => {
       if (!ref.current) return;
       const raw = (clock.elapsedTime * 0.28 + i * 0.31) % 1;
       const capped = active ? raw : Math.min(raw, 0.62);
@@ -166,6 +169,7 @@ function SignalWorld({ active }: { active: boolean }) {
       (ref.current.material as THREE.MeshBasicMaterial).opacity = raw < 0.08 ? raw / 0.08 : raw > 0.92 ? (1 - raw) / 0.08 : 0.85;
     });
   });
+
   return (
     <group>
       <Node x={-1.28} active warm={active} />
@@ -174,12 +178,18 @@ function SignalWorld({ active }: { active: boolean }) {
         <boxGeometry args={[2.2, 0.012, 0.012]} />
         <meshBasicMaterial color={active ? coral : "#9f958e"} transparent opacity={active ? 0.24 : 0.12} />
       </mesh>
-      {packets.map((ref, i) => (
-        <mesh key={i} ref={ref}>
-          <sphereGeometry args={[0.035 + i * 0.008, 20, 20]} />
-          <meshBasicMaterial color={i === 1 ? amber : coral} transparent opacity={0.8} />
-        </mesh>
-      ))}
+      <mesh ref={packet0}>
+        <sphereGeometry args={[0.035, 20, 20]} />
+        <meshBasicMaterial color={coral} transparent opacity={0.8} />
+      </mesh>
+      <mesh ref={packet1}>
+        <sphereGeometry args={[0.043, 20, 20]} />
+        <meshBasicMaterial color={amber} transparent opacity={0.8} />
+      </mesh>
+      <mesh ref={packet2}>
+        <sphereGeometry args={[0.051, 20, 20]} />
+        <meshBasicMaterial color={coral} transparent opacity={0.8} />
+      </mesh>
     </group>
   );
 }
@@ -289,7 +299,6 @@ function Dust({ warmth }: { warmth: number }) {
 
 export function SensoryLabWorld({ scene, onAdvance }: Props) {
   const root = useRef<THREE.Group>(null);
-  const camera = useThree((state) => state.camera);
   const viewportWidth = useThree((state) => state.viewport.width);
   const narrow = viewportWidth < 3.5;
   const warmth = useSceneWarmth(scene);
@@ -301,6 +310,7 @@ export function SensoryLabWorld({ scene, onAdvance }: Props) {
     const close = ["third", "reveal", "name", "ninetyone", "ninetysix"].includes(scene);
     cameraTarget.set(0, close ? 0.92 : 1.08, narrow ? (close ? 6.25 : 6.8) : (close ? 4.65 : 5.45));
     lookTarget.set(0, 0.24, 0);
+    const camera = state.camera;
     camera.position.x = damp(camera.position.x, cameraTarget.x, 2.7, delta);
     camera.position.y = damp(camera.position.y, cameraTarget.y, 2.7, delta);
     camera.position.z = damp(camera.position.z, cameraTarget.z, 2.7, delta);
