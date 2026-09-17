@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "token:create": "node scripts/create-encounter-token.mjs"
   },
   "dependencies": {
     "@react-three/drei": "10.7.8",

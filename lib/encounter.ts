@@ -1,17 +1,23 @@
 export type IntroStage = "object" | "context" | "world" | "metrics" | "problem" | "inspect";
 
 export type SpaceId = "build" | "sound" | "object" | "door";
+export type ResponseAction = "wave" | "message" | "archive";
 
 export type ExperienceMode =
   | { kind: "intro"; stage: IntroStage }
   | { kind: "explore"; activeSpace: SpaceId | null; visited: SpaceId[] }
-  | { kind: "reveal" };
+  | { kind: "reveal" }
+  | { kind: "identify" }
+  | { kind: "consent"; recipientName: string }
+  | { kind: "message"; recipientName: string }
+  | { kind: "complete"; recipientName: string; action: Exclude<ResponseAction, "archive"> }
+  | { kind: "archived"; recipientName: string };
 
 export const SPACE_COPY: Record<SpaceId, { label: string; code: string; line: string }> = {
   build: {
     label: "BUILD",
     code: "NOVA / TESWA",
-    line: "He has a habit of turning “what if?” into things that actually run.",
+    line: "He has a habit of turning ‘what if?’ into things that actually run.",
   },
   sound: {
     label: "SOUND",

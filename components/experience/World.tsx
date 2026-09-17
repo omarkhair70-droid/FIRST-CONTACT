@@ -10,6 +10,8 @@ import type { IntroStage, SpaceId } from "@/lib/encounter";
 type WorldProps = {
   stage: IntroStage;
   exploring: boolean;
+  postReveal: boolean;
+  bridgeProgress: number;
   activeSpace: SpaceId | null;
   visited: SpaceId[];
   onInspectO: () => void;
@@ -21,11 +23,7 @@ const charcoal = "#20201d";
 const accent = "#a55436";
 
 function Block({ position, scale, rotation = [0, 0, 0] }: { position: [number, number, number]; scale: [number, number, number]; rotation?: [number, number, number] }) {
-  return (
-    <RoundedBox position={position} scale={scale} rotation={rotation} radius={0.055} smoothness={3}>
-      <meshStandardMaterial color={ivory} roughness={0.87} metalness={0.02} />
-    </RoundedBox>
-  );
+  return <RoundedBox position={position} scale={scale} rotation={rotation} radius={0.055} smoothness={3}><meshStandardMaterial color={ivory} roughness={0.87} metalness={0.02} /></RoundedBox>;
 }
 
 function Structure({ side }: { side: -1 | 1 }) {
@@ -66,16 +64,24 @@ function Node({ position, label, visible, interactive, onClick }: { position: [n
   );
 }
 
-function SpaceObjects({ activeSpace, visited, onSelectSpace }: { activeSpace: SpaceId | null; visited: SpaceId[]; onSelectSpace: (space: SpaceId) => void }) {
-  const spaces = useMemo(
-    () => [
-      { id: "build" as const, p: [-1.65, 0.85, 0.55] as [number, number, number], shape: "box" },
-      { id: "sound" as const, p: [-0.55, 1.35, -0.25] as [number, number, number], shape: "ring" },
-      { id: "object" as const, p: [0.62, 1.05, 0.42] as [number, number, number], shape: "ico" },
-      { id: "door" as const, p: [1.72, 0.7, -0.28] as [number, number, number], shape: "door" },
-    ],
-    [],
+function Bridge({ progress }: { progress: number }) {
+  if (progress <= 0) return null;
+  const width = 2.4 * Math.min(1, Math.max(0, progress));
+  return (
+    <mesh position={[-1.2 + width / 2, -0.28, 0.08]} scale={[width, 0.09, 0.46]}>
+      <boxGeometry />
+      <meshStandardMaterial color={accent} roughness={0.74} metalness={0.04} />
+    </mesh>
   );
+}
+
+function SpaceObjects({ activeSpace, visited, onSelectSpace }: { activeSpace: SpaceId | null; visited: SpaceId[]; onSelectSpace: (space: SpaceId) => void }) {
+  const spaces = useMemo(() => [
+    { id: "build" as const, p: [-1.65, 0.85, 0.55] as [number, number, number], shape: "box" },
+    { id: "sound" as const, p: [-0.55, 1.35, -0.25] as [number, number, number], shape: "ring" },
+    { id: "object" as const, p: [0.62, 1.05, 0.42] as [number, number, number], shape: "ico" },
+    { id: "door" as const, p: [1.72, 0.7, -0.28] as [number, number, number], shape: "door" },
+  ], []);
 
   return (
     <group>
@@ -84,7 +90,7 @@ function SpaceObjects({ activeSpace, visited, onSelectSpace }: { activeSpace: Sp
         const hasVisited = visited.includes(id);
         const color = isActive ? accent : hasVisited ? "#746b5d" : charcoal;
         return (
-          <group key={id} position={p} onClick={(e) => { e.stopPropagation(); onSelectSpace(id); }} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "default")}>
+          <group key={id} position={p} onClick={(event) => { event.stopPropagation(); onSelectSpace(id); }} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "default")}>
             {shape === "ring" && <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.19, 0.045, 16, 64]} /><meshStandardMaterial color={color} roughness={0.45} /></mesh>}
             {shape === "ico" && <mesh><icosahedronGeometry args={[0.22, 1]} /><meshStandardMaterial color={color} roughness={0.72} /></mesh>}
             {shape === "door" && <mesh scale={[0.24, 0.46, 0.08]}><boxGeometry /><meshStandardMaterial color={color} roughness={0.8} /></mesh>}
@@ -96,10 +102,10 @@ function SpaceObjects({ activeSpace, visited, onSelectSpace }: { activeSpace: Sp
   );
 }
 
-export function World({ stage, exploring, activeSpace, visited, onInspectO, onSelectSpace }: WorldProps) {
+export function World({ stage, exploring, postReveal, bridgeProgress, activeSpace, visited, onInspectO, onSelectSpace }: WorldProps) {
   const world = useRef<THREE.Group>(null);
-  const buildingsVisible = stage === "world" || stage === "metrics" || stage === "problem" || stage === "inspect";
-  const nodesVisible = stage === "metrics" || stage === "problem" || stage === "inspect";
+  const buildingsVisible = postReveal || stage === "world" || stage === "metrics" || stage === "problem" || stage === "inspect";
+  const nodesVisible = postReveal || stage === "metrics" || stage === "problem" || stage === "inspect";
 
   useFrame((state, delta) => {
     if (!world.current) return;
@@ -115,7 +121,8 @@ export function World({ stage, exploring, activeSpace, visited, onInspectO, onSe
         <group>
           <Structure side={-1} />
           <Structure side={1} />
-          <Node position={[-1.25, 1.18, 0.22]} label="O" visible={nodesVisible} interactive={stage === "inspect"} onClick={onInspectO} />
+          <Bridge progress={bridgeProgress} />
+          <Node position={[-1.25, 1.18, 0.22]} label="O" visible={nodesVisible} interactive={!postReveal && stage === "inspect"} onClick={onInspectO} />
           <Node position={[1.34, 1.02, 0.08]} label="?" visible={nodesVisible} />
         </group>
       )}
