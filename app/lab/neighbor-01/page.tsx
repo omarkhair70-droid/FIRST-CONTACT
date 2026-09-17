@@ -1,10 +1,10 @@
-import { SensoryLabExperience } from "@/components/lab/SensoryLabExperience";
+import { RecipientSensoryPreview } from "@/components/lab/RecipientSensoryPreview";
 
 export const metadata = {
-  title: "HELLO:// NEIGHBOR_01 — Sensory Art Lab",
+  title: "HELLO:// NEIGHBOR_01 — Recipient Preview",
   robots: { index: false, follow: false },
 };
 
 export default function Neighbor01SensoryLabPage() {
-  return <SensoryLabExperience />;
+  return <RecipientSensoryPreview />;
 }
