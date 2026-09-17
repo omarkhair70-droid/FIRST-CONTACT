@@ -19,7 +19,7 @@ export default function HomePage() {
         @keyframes encounterControlIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
         @media(prefers-reduced-motion:reduce){.encounter-copy,.encounter-copy .kicker,.encounter-copy .body,.encounter-copy .whisper,.choice-panel,.name-form,.signal-form,.end-panel{animation:none!important}}
       `}</style>
-      <RecipientSensoryPreview />
+      <RecipientSensoryPreview persistResponses />
     </>
   );
 }
