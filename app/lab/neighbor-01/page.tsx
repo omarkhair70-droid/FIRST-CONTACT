@@ -6,5 +6,10 @@ export const metadata = {
 };
 
 export default function Neighbor01SensoryLabPage() {
-  return <RecipientSensoryPreview />;
+  return (
+    <>
+      <style>{`.encounter-top-actions button:nth-child(2){display:none!important}`}</style>
+      <RecipientSensoryPreview />
+    </>
+  );
 }
