@@ -1,7 +1,7 @@
 "use client";
 
 import { ContactShadows, RoundedBox } from "@react-three/drei";
-import { ThreeEvent, useFrame } from "@react-three/fiber";
+import { ThreeEvent, useFrame, useThree } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 
@@ -56,7 +56,17 @@ function Node({ position, label, visible, interactive, onClick }: { position: [n
 
   return (
     <group position={position} visible={visible}>
-      <mesh ref={ref} onClick={handleClick} onPointerOver={() => interactive && (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "default")}>
+      {interactive && (
+        <mesh
+          onClick={handleClick}
+          onPointerOver={() => (document.body.style.cursor = "pointer")}
+          onPointerOut={() => (document.body.style.cursor = "default")}
+        >
+          <sphereGeometry args={[0.3, 18, 18]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
+      <mesh ref={ref}>
         <sphereGeometry args={[0.09, 32, 32]} />
         <meshStandardMaterial color={label === "O" ? charcoal : "#6c6a63"} emissive={label === "O" ? charcoal : "#000000"} emissiveIntensity={0.08} />
       </mesh>
@@ -90,7 +100,15 @@ function SpaceObjects({ activeSpace, visited, onSelectSpace }: { activeSpace: Sp
         const hasVisited = visited.includes(id);
         const color = isActive ? accent : hasVisited ? "#746b5d" : charcoal;
         return (
-          <group key={id} position={p} onClick={(event) => { event.stopPropagation(); onSelectSpace(id); }} onPointerOver={() => (document.body.style.cursor = "pointer")} onPointerOut={() => (document.body.style.cursor = "default")}>
+          <group key={id} position={p}>
+            <mesh
+              onClick={(event) => { event.stopPropagation(); onSelectSpace(id); }}
+              onPointerOver={() => (document.body.style.cursor = "pointer")}
+              onPointerOut={() => (document.body.style.cursor = "default")}
+            >
+              <sphereGeometry args={[0.34, 16, 16]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
             {shape === "ring" && <mesh rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.19, 0.045, 16, 64]} /><meshStandardMaterial color={color} roughness={0.45} /></mesh>}
             {shape === "ico" && <mesh><icosahedronGeometry args={[0.22, 1]} /><meshStandardMaterial color={color} roughness={0.72} /></mesh>}
             {shape === "door" && <mesh scale={[0.24, 0.46, 0.08]}><boxGeometry /><meshStandardMaterial color={color} roughness={0.8} /></mesh>}
@@ -104,19 +122,22 @@ function SpaceObjects({ activeSpace, visited, onSelectSpace }: { activeSpace: Sp
 
 export function World({ stage, exploring, postReveal, bridgeProgress, activeSpace, visited, onInspectO, onSelectSpace }: WorldProps) {
   const world = useRef<THREE.Group>(null);
+  const viewportWidth = useThree((state) => state.viewport.width);
+  const isNarrow = viewportWidth < 3.5;
+  const fitScale = isNarrow ? Math.max(0.43, Math.min(0.62, viewportWidth / 4.8)) : 1;
   const buildingsVisible = postReveal || stage === "world" || stage === "metrics" || stage === "problem" || stage === "inspect";
   const nodesVisible = postReveal || stage === "metrics" || stage === "problem" || stage === "inspect";
 
   useFrame((state, delta) => {
     if (!world.current) return;
-    const targetY = state.pointer.x * 0.12;
-    const targetX = -state.pointer.y * 0.055;
+    const targetY = state.pointer.x * (isNarrow ? 0.07 : 0.12);
+    const targetX = -state.pointer.y * (isNarrow ? 0.035 : 0.055);
     world.current.rotation.y = THREE.MathUtils.damp(world.current.rotation.y, targetY, 4, delta);
     world.current.rotation.x = THREE.MathUtils.damp(world.current.rotation.x, targetX, 4, delta);
   });
 
   return (
-    <group ref={world} position={[0, -0.15, 0]}>
+    <group ref={world} position={[0, isNarrow ? 0.34 : -0.15, 0]} scale={fitScale}>
       {buildingsVisible && !exploring && (
         <group>
           <Structure side={-1} />

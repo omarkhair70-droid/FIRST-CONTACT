@@ -17,6 +17,57 @@ const INTRO_SEQUENCE: Array<{ stage: IntroStage; at: number }> = [
   { stage: "inspect", at: 12600 },
 ];
 
+const MOBILE_CLOSURE_STYLES = `
+  .narrative.narrative-scroll {
+    bottom: calc(58px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    pointer-events: auto;
+    padding-bottom: 28px;
+    scrollbar-width: none;
+  }
+  .narrative.narrative-scroll::-webkit-scrollbar { display: none; }
+  .protocol-form input,
+  .protocol-form textarea { font-size: 16px; }
+  .quiet-action,
+  .protocol-form > button,
+  .form-actions button { min-height: 44px; display: inline-flex; align-items: center; }
+  .system-header { padding-top: max(18px, env(safe-area-inset-top)); }
+  .system-footer { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+
+  @media (max-width: 560px) {
+    .narrative { left: 16px; right: 16px; top: calc(72px + env(safe-area-inset-top)); }
+    .narrative.narrative-scroll { bottom: calc(54px + env(safe-area-inset-bottom)); }
+    h1 { font-size: clamp(34px, 10.5vw, 48px); line-height: .94; }
+    .support.wide { font-size: 13px; line-height: 1.6; }
+    .reveal-copy { margin-top: 16px; }
+    .reveal-copy .arabic { font-size: 17px; line-height: 1.72; }
+    .reveal-nodes { margin-top: 20px; gap: 9px; }
+    .choice-grid { margin-top: 18px; gap: 8px; }
+    .choice-grid button { min-height: 78px; padding: 11px 12px; }
+    .protocol-form { gap: 10px; }
+    .protocol-form input,
+    .protocol-form textarea { padding: 14px 0; }
+    .system-header,
+    .system-footer { padding-left: 16px; padding-right: 16px; }
+  }
+
+  @media (max-height: 700px) {
+    .narrative { top: calc(66px + env(safe-area-inset-top)); }
+    .narrative.narrative-scroll { bottom: calc(50px + env(safe-area-inset-bottom)); }
+    h1 { font-size: clamp(30px, 8vw, 44px); }
+    .eyebrow { margin-bottom: 8px; }
+    .support { margin-top: 10px; }
+    .reveal-copy,
+    .protocol-panel,
+    .protocol-form { margin-top: 14px; }
+    .reveal-copy .arabic { margin-top: 10px; font-size: 15px; line-height: 1.6; }
+    .choice-grid button { min-height: 68px; }
+  }
+`;
+
 export function FirstContactExperience() {
   const [mode, setMode] = useState<ExperienceMode>({ kind: "intro", stage: "object" });
   const [nameDraft, setNameDraft] = useState("");
@@ -41,6 +92,7 @@ export function FirstContactExperience() {
   const activeSpace = mode.kind === "explore" ? mode.activeSpace : null;
   const visited = mode.kind === "explore" ? mode.visited : [];
   const bridgeProgress = mode.kind === "complete" ? (mode.action === "message" ? 1 : 0.5) : 0;
+  const narrativeScrollable = ["reveal", "identify", "consent", "message", "complete", "archived"].includes(mode.kind);
 
   const inspectO = useCallback(() => {
     if (mode.kind !== "intro" || mode.stage !== "inspect") return;
@@ -77,6 +129,10 @@ export function FirstContactExperience() {
       case "inspect": return "inspect node O";
     }
   }, [activeCopy, mode]);
+
+  const keepFieldVisible = useCallback((element: HTMLElement) => {
+    window.setTimeout(() => element.scrollIntoView({ block: "center", behavior: "smooth" }), 180);
+  }, []);
 
   async function submitResponse(type: ResponseAction, recipientName: string, message?: string) {
     setSubmitError("");
@@ -129,6 +185,7 @@ export function FirstContactExperience() {
 
   return (
     <main className="experience-shell">
+      <style>{MOBILE_CLOSURE_STYLES}</style>
       <div className="grain" aria-hidden="true" />
       <header className="system-header"><span>HELLO://01</span><span>NEIGHBOR_01</span></header>
 
@@ -141,7 +198,7 @@ export function FirstContactExperience() {
         </Canvas>
       </section>
 
-      <section className="narrative" ref={copyRef} key={modeKey}>
+      <section className={`narrative${narrativeScrollable ? " narrative-scroll" : ""}`} ref={copyRef} key={modeKey}>
         <p className="eyebrow">
           {mode.kind === "explore" ? activeCopy?.code ?? `${visited.length}/4 DISCOVERED` : mode.kind === "intro" ? "FIRST CONTACT PROTOCOL" : "CONNECTION PROTOCOL"}
         </p>
@@ -166,7 +223,15 @@ export function FirstContactExperience() {
         {mode.kind === "identify" && (
           <form className="protocol-form" onSubmit={identify}>
             <p className="support wide">No profile. No account. Just the name you want this little system to know you by.</p>
-            <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} maxLength={40} placeholder="name / nickname" autoFocus />
+            <input
+              value={nameDraft}
+              onChange={(event) => setNameDraft(event.target.value)}
+              onFocus={(event) => keepFieldVisible(event.currentTarget)}
+              maxLength={40}
+              placeholder="name / nickname"
+              autoComplete="off"
+              enterKeyHint="done"
+            />
             <button type="submit" disabled={!nameDraft.trim()}>continue →</button>
           </form>
         )}
@@ -180,16 +245,24 @@ export function FirstContactExperience() {
               <button type="button" disabled={submitting} onClick={() => { setSubmitError(""); setMode({ kind: "message", recipientName: mode.recipientName }); }}><b>02</b><span>MESSAGE</span><small>send something now</small></button>
               <button type="button" disabled={submitting} onClick={() => choose("archive", mode.recipientName)}><b>03</b><span>ARCHIVE</span><small>leave it here</small></button>
             </div>
-            {submitError && <p className="status-note error">{submitError}</p>}
+            {submitError && <p className="status-note error" role="status">{submitError}</p>}
           </div>
         )}
 
         {mode.kind === "message" && (
           <form className="protocol-form" onSubmit={(event) => sendMessage(event, mode.recipientName)}>
             <p className="support wide">This goes to Omar&apos;s private HELLO inbox. No Instagram redirect required.</p>
-            <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} maxLength={1000} rows={4} placeholder="say anything…" autoFocus />
+            <textarea
+              value={messageDraft}
+              onChange={(event) => setMessageDraft(event.target.value)}
+              onFocus={(event) => keepFieldVisible(event.currentTarget)}
+              maxLength={1000}
+              rows={4}
+              placeholder="say anything…"
+              enterKeyHint="send"
+            />
             <div className="form-actions"><button type="button" onClick={() => setMode({ kind: "consent", recipientName: mode.recipientName })}>← back</button><button type="submit" disabled={submitting || !messageDraft.trim()}>{submitting ? "sending…" : "send through →"}</button></div>
-            {submitError && <p className="status-note error">{submitError}</p>}
+            {submitError && <p className="status-note error" role="status">{submitError}</p>}
           </form>
         )}
 
