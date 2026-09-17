@@ -41,10 +41,14 @@ const MOBILE_CLOSURE_STYLES = `
   .completion-meter { margin: 24px 0 8px; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(48px, 12vw, 90px); font-weight: 400; letter-spacing: -.06em; line-height: .85; }
   .completion-rule { width: min(100%, 390px); height: 1px; margin: 18px 0; background: linear-gradient(90deg, var(--accent) 0 91%, var(--line) 91% 100%); }
   .lab-flag { position: absolute; z-index: 40; top: calc(48px + env(safe-area-inset-top)); right: 16px; padding: 7px 9px; border: 1px solid var(--line); background: rgba(236,232,223,.76); backdrop-filter: blur(10px); color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
+  .lab-console { position:absolute; z-index:70; left:50%; bottom:calc(48px + env(safe-area-inset-bottom)); width:min(920px,calc(100% - 24px)); transform:translateX(-50%); display:flex; gap:5px; overflow-x:auto; padding:7px; border:1px solid rgba(31,31,27,.14); background:rgba(244,240,231,.78); backdrop-filter:blur(16px); -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .lab-console::-webkit-scrollbar { display:none; }
+  .lab-console button { flex:0 0 auto; min-height:32px; border:1px solid rgba(31,31,27,.15); padding:6px 9px; background:rgba(255,255,255,.18); color:var(--ink); cursor:pointer; font-size:8px; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+  .lab-console button:hover { border-color:var(--accent); }
 
   @media (max-width: 560px) {
     .narrative { left: 16px; right: 16px; top: calc(72px + env(safe-area-inset-top)); }
-    .narrative.narrative-scroll { bottom: calc(54px + env(safe-area-inset-bottom)); }
+    .narrative.narrative-scroll { bottom: calc(96px + env(safe-area-inset-bottom)); }
     h1 { font-size: clamp(34px, 10.5vw, 48px); line-height: .94; }
     .support.wide { font-size: 13px; line-height: 1.6; }
     .reveal-copy { margin-top: 16px; }
@@ -59,11 +63,12 @@ const MOBILE_CLOSURE_STYLES = `
     .system-footer { padding-left: 16px; padding-right: 16px; }
     .relation-note { font-size: 13px; }
     .lab-flag { top: calc(51px + env(safe-area-inset-top)); }
+    .lab-console { bottom:calc(45px + env(safe-area-inset-bottom)); }
   }
 
   @media (max-height: 700px) {
     .narrative { top: calc(66px + env(safe-area-inset-top)); }
-    .narrative.narrative-scroll { bottom: calc(50px + env(safe-area-inset-bottom)); }
+    .narrative.narrative-scroll { bottom: calc(92px + env(safe-area-inset-bottom)); }
     h1 { font-size: clamp(30px, 8vw, 44px); }
     .eyebrow { margin-bottom: 8px; }
     .support { margin-top: 10px; }
@@ -82,9 +87,12 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const copyRef = useRef<HTMLDivElement>(null);
+  const labManualRef = useRef(false);
 
   useEffect(() => {
-    const timers = INTRO_SEQUENCE.slice(1).map(({ stage, at }) => window.setTimeout(() => setMode({ kind: "intro", stage }), at));
+    const timers = INTRO_SEQUENCE.slice(1).map(({ stage, at }) => window.setTimeout(() => {
+      if (!labManualRef.current) setMode({ kind: "intro", stage });
+    }, at));
     return () => timers.forEach(window.clearTimeout);
   }, []);
 
@@ -118,6 +126,23 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
     if (navigator.vibrate) navigator.vibrate(12);
   }, []);
 
+  const jumpLab = useCallback((target: "object" | "gap" | "angle" | "signal" | "third" | "remainder" | "reveal" | "consent" | "91" | "96" | "unchanged") => {
+    labManualRef.current = true;
+    setSubmitError("");
+    playCue(target === "91" || target === "96" ? "complete" : target === "reveal" ? "reveal" : "shift");
+    if (target === "object") setMode({ kind: "intro", stage: "object" });
+    if (target === "gap") setMode({ kind: "intro", stage: "inspect" });
+    if (target === "angle") setMode({ kind: "explore", activeSpace: "build", visited: ["build"] });
+    if (target === "signal") setMode({ kind: "explore", activeSpace: "sound", visited: ["build", "sound"] });
+    if (target === "third") setMode({ kind: "explore", activeSpace: "object", visited: ["build", "sound", "object"] });
+    if (target === "remainder") setMode({ kind: "explore", activeSpace: "door", visited: ["build", "sound", "object", "door"] });
+    if (target === "reveal") setMode({ kind: "reveal" });
+    if (target === "consent") { setNameDraft("NODE B"); setMode({ kind: "consent", recipientName: "NODE B" }); }
+    if (target === "91") setMode({ kind: "complete", recipientName: "NODE B", action: "wave" });
+    if (target === "96") setMode({ kind: "complete", recipientName: "NODE B", action: "message" });
+    if (target === "unchanged") setMode({ kind: "archived", recipientName: "NODE B" });
+  }, []);
+
   const canReveal = mode.kind === "explore" && mode.visited.length >= 2;
   const activeCopy = activeSpace ? SPACE_COPY[activeSpace] : null;
 
@@ -145,7 +170,6 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
 
   async function submitResponse(type: ResponseAction, recipientName: string, message?: string) {
     setSubmitError("");
-
     if (labMode) {
       setSubmitting(true);
       await new Promise((resolve) => window.setTimeout(resolve, type === "message" ? 680 : 420));
@@ -229,9 +253,7 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
       </section>
 
       <section className={`narrative${narrativeScrollable ? " narrative-scroll" : ""}`} ref={copyRef} key={modeKey}>
-        <p className="eyebrow">
-          {mode.kind === "explore" ? activeCopy?.code ?? `${visited.length}/4 VIEWS` : mode.kind === "intro" ? "FIRST CONTACT / FIELD TEST 001" : "SHARED OBJECT / ACTIVE"}
-        </p>
+        <p className="eyebrow">{mode.kind === "explore" ? activeCopy?.code ?? `${visited.length}/4 VIEWS` : mode.kind === "intro" ? "FIRST CONTACT / FIELD TEST 001" : "SHARED OBJECT / ACTIVE"}</p>
         <h1>{headline}</h1>
 
         {mode.kind === "intro" && mode.stage === "metrics" && <p className="support">SHARED CONTEXT <strong>0</strong></p>}
@@ -254,15 +276,7 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
         {mode.kind === "identify" && (
           <form className="protocol-form" onSubmit={identify}>
             <p className="support wide">If you want to become the second node, give it any name. No profile. No account. You can also leave it unknown.</p>
-            <input
-              value={nameDraft}
-              onChange={(event) => setNameDraft(event.target.value)}
-              onFocus={(event) => keepFieldVisible(event.currentTarget)}
-              maxLength={40}
-              placeholder="name / nickname"
-              autoComplete="off"
-              enterKeyHint="done"
-            />
+            <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} onFocus={(event) => keepFieldVisible(event.currentTarget)} maxLength={40} placeholder="name / nickname" autoComplete="off" enterKeyHint="done" />
             <button type="submit" disabled={!nameDraft.trim()}>enter the field →</button>
           </form>
         )}
@@ -283,15 +297,7 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
         {mode.kind === "message" && (
           <form className="protocol-form" onSubmit={(event) => sendMessage(event, mode.recipientName)}>
             <p className="support wide">One sentence is enough. This is not a chat app; it is just a signal before the next real encounter.</p>
-            <textarea
-              value={messageDraft}
-              onChange={(event) => setMessageDraft(event.target.value)}
-              onFocus={(event) => keepFieldVisible(event.currentTarget)}
-              maxLength={1000}
-              rows={4}
-              placeholder="send one thing…"
-              enterKeyHint="send"
-            />
+            <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} onFocus={(event) => keepFieldVisible(event.currentTarget)} maxLength={1000} rows={4} placeholder="send one thing…" enterKeyHint="send" />
             <div className="form-actions"><button type="button" onClick={() => setMode({ kind: "consent", recipientName: mode.recipientName })}>← back</button><button type="submit" disabled={submitting || !messageDraft.trim()}>{submitting ? "crossing the gap…" : "send signal →"}</button></div>
             {submitError && <p className="status-note error" role="status">{submitError}</p>}
           </form>
@@ -309,6 +315,22 @@ export function FirstContactExperience({ labMode = false }: { labMode?: boolean 
 
         {mode.kind === "archived" && <div className="protocol-panel"><p className="support wide">No explanation required. No follow-up is owed. The field closes exactly where you left it.</p><p className="tiny">OBJECT 001 / NO CLAIM MADE</p></div>}
       </section>
+
+      {labMode && (
+        <nav className="lab-console" aria-label="Sensory lab scene controls">
+          <button type="button" onClick={() => jumpLab("object")}>Object</button>
+          <button type="button" onClick={() => jumpLab("gap")}>Gap</button>
+          <button type="button" onClick={() => jumpLab("angle")}>Angle</button>
+          <button type="button" onClick={() => jumpLab("signal")}>Signal</button>
+          <button type="button" onClick={() => jumpLab("third")}>Third Thing</button>
+          <button type="button" onClick={() => jumpLab("remainder")}>Remainder</button>
+          <button type="button" onClick={() => jumpLab("reveal")}>Reveal</button>
+          <button type="button" onClick={() => jumpLab("consent")}>Choice</button>
+          <button type="button" onClick={() => jumpLab("91")}>91%</button>
+          <button type="button" onClick={() => jumpLab("96")}>96%</button>
+          <button type="button" onClick={() => jumpLab("unchanged")}>Unchanged</button>
+        </nav>
+      )}
 
       <footer className="system-footer"><span>OBJECT 001</span><span>{mode.kind === "complete" ? "IRL REMAINDER" : mode.kind === "archived" ? "UNCHANGED" : mode.kind === "explore" ? `${visited.length}/4 VIEWS` : stage.toUpperCase()}</span></footer>
     </main>
