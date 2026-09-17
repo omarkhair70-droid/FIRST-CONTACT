@@ -3,11 +3,13 @@
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
 
-import { SensoryLabWorld, type SensoryScene } from "@/components/lab/SensoryLabWorld";
+import { RecipientWorld } from "@/components/lab/RecipientWorld";
+import type { SensoryScene } from "@/components/lab/SensoryLabWorld";
 import { createSensorySoundscape } from "@/lib/client/sensory-sonic";
 
 const ORDER: SensoryScene[] = ["object", "gap", "angle", "signal", "third", "reveal", "name", "choice", "ninetyone"];
 const LAB_SCENES: SensoryScene[] = [...ORDER, "ninetysix", "unchanged"];
+const TOUCH_SCENES: SensoryScene[] = ["angle", "signal", "third"];
 
 const COPY: Partial<Record<SensoryScene, { kicker: string; title: string; body?: string; whisper?: string }>> = {
   object: { kicker: "FIELD OBJECT / 001", title: "OBJECT 001", body: "touch to wake" },
@@ -34,6 +36,7 @@ function mood(scene: SensoryScene) {
 
 export function RecipientSensoryPreview() {
   const [scene, setScene] = useState<SensoryScene>("object");
+  const [engaged, setEngaged] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
   const [labOpen, setLabOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -45,11 +48,12 @@ export function RecipientSensoryPreview() {
   const sceneMood = mood(scene);
   const copy = COPY[scene] ?? COPY.object!;
   const terminal = ["ninetyone", "ninetysix", "unchanged"].includes(scene);
+  const touchScene = TOUCH_SCENES.includes(scene);
 
   useEffect(() => {
     if (!soundOn || !engineRef.current) return;
     engineRef.current.setScene(scene);
-    engineRef.current.accent(scene);
+    if (!TOUCH_SCENES.includes(scene)) engineRef.current.accent(scene);
   }, [scene, soundOn]);
 
   useEffect(() => () => engineRef.current?.destroy(), []);
@@ -62,10 +66,11 @@ export function RecipientSensoryPreview() {
     setSoundOn(Boolean(engineRef.current));
   }
 
-  function haptic(next: SensoryScene) {
+  function haptic(next: SensoryScene, interaction = false) {
     if (!navigator.vibrate) return;
-    if (next === "angle") navigator.vibrate([10, 34, 10]);
-    else if (next === "signal") navigator.vibrate(10);
+    if (next === "angle" && interaction) navigator.vibrate([10, 34, 10]);
+    else if (next === "signal" && interaction) navigator.vibrate([8, 18, 8]);
+    else if (next === "third" && interaction) navigator.vibrate(20);
     else if (next === "name") navigator.vibrate(24);
     else if (next === "ninetyone") navigator.vibrate([20, 52, 11]);
     else navigator.vibrate(9);
@@ -74,11 +79,12 @@ export function RecipientSensoryPreview() {
   function go(next: SensoryScene) {
     ensureSound();
     setSignalOpen(false);
+    setEngaged(false);
     setScene(next);
     haptic(next);
   }
 
-  function advance() {
+  function advanceScene() {
     if (scene === "object") return go("gap");
     if (scene === "gap") return go("angle");
     if (scene === "angle") return go("signal");
@@ -87,12 +93,25 @@ export function RecipientSensoryPreview() {
     if (scene === "reveal") return go("name");
   }
 
+  function interactOrAdvance() {
+    ensureSound();
+    if (touchScene && !engaged) {
+      setEngaged(true);
+      engineRef.current?.accent(scene);
+      haptic(scene, true);
+      return;
+    }
+    advanceScene();
+  }
+
   function acceptName() {
     const value = nameDraft.trim().slice(0, 40);
     if (!value) return;
     ensureSound();
     setRecipientName(value);
+    setEngaged(true);
     setScene("choice");
+    engineRef.current?.accent("name");
     if (navigator.vibrate) navigator.vibrate(26);
   }
 
@@ -106,6 +125,7 @@ export function RecipientSensoryPreview() {
     setNameDraft("");
     setSignalDraft("");
     setSignalOpen(false);
+    setEngaged(false);
     go("object");
   }
 
@@ -120,6 +140,9 @@ export function RecipientSensoryPreview() {
   }
 
   const nameForArt = recipientName || (labOpen && scene === "name" ? "YASMEEN" : "");
+  const actionLabel = touchScene && !engaged
+    ? scene === "angle" ? "change the angle" : scene === "signal" ? "let it cross" : "touch the space between"
+    : "continue";
 
   return (
     <main className={`encounter-preview encounter-${sceneMood}`}>
@@ -197,13 +220,13 @@ export function RecipientSensoryPreview() {
         </div>
       </header>
 
-      <section className="encounter-canvas" aria-label="NEIGHBOR_01 recipient sensory preview">
+      <section className="encounter-canvas" aria-label="NEIGHBOR_01 recipient sensory preview" onClick={terminal || ["name", "choice"].includes(scene) ? undefined : interactOrAdvance}>
         <Canvas camera={{ position:[0,1.08,5.45], fov:38 }} dpr={[1,1.7]} gl={{ antialias:true, alpha:true, powerPreference:"high-performance" }}>
           <ambientLight intensity={sceneMood === "peak" ? 1.8 : sceneMood === "warm" ? 1.56 : 1.24} />
           <directionalLight position={[4,7,5]} intensity={sceneMood === "peak" ? 3 : 2.2} color={sceneMood === "cold" ? "#f5f3ef" : "#ffede2"} />
           <pointLight position={[-2,1.6,2]} intensity={sceneMood === "warm" || sceneMood === "peak" ? 1.35 : .22} color="#d47a61" />
           <pointLight position={[2.1,.8,1.4]} intensity={sceneMood === "peak" ? 1.05 : .15} color="#daa65d" />
-          <SensoryLabWorld scene={scene} onAdvance={terminal || ["name","choice"].includes(scene) ? undefined : advance} />
+          <RecipientWorld scene={scene} engaged={engaged} named={Boolean(recipientName)} />
         </Canvas>
       </section>
 
@@ -216,8 +239,8 @@ export function RecipientSensoryPreview() {
 
       {nameForArt && <div className="name-ghost" aria-hidden="true">{nameForArt.toUpperCase()}</div>}
 
-      {scene === "object" && <button className="encounter-wake" type="button" onClick={advance}>touch to wake</button>}
-      {["gap","angle","signal","third","reveal"].includes(scene) && <button className="encounter-continue" type="button" onClick={advance}>continue →</button>}
+      {scene === "object" && <button className="encounter-wake" type="button" onClick={interactOrAdvance}>touch to wake</button>}
+      {["gap","angle","signal","third","reveal"].includes(scene) && <button className="encounter-continue" type="button" onClick={interactOrAdvance}>{actionLabel} →</button>}
 
       {scene === "name" && (
         <form className="name-form" onSubmit={(event) => { event.preventDefault(); acceptName(); }}>
@@ -247,12 +270,12 @@ export function RecipientSensoryPreview() {
         <aside className="lab-drawer">
           <p>sensory lab · local only · no backend</p>
           <div className="lab-grid">
-            {LAB_SCENES.map((item) => <button key={item} type="button" data-active={scene === item} onClick={() => { if (item === "name" && !nameDraft) setNameDraft("YASMEEN"); go(item); }}>{item === "ninetyone" ? "91%" : item === "ninetysix" ? "96%" : item}</button>)}
+            {LAB_SCENES.map((item) => <button key={item} type="button" data-active={scene === item} onClick={() => { if (item === "name" && !nameDraft) setNameDraft("YASMEEN"); setEngaged(TOUCH_SCENES.includes(item)); go(item); }}>{item === "ninetyone" ? "91%" : item === "ninetysix" ? "96%" : item}</button>)}
           </div>
         </aside>
       )}
 
-      {!terminal && scene !== "object" && <div className="tap-hint">tap the world or continue</div>}
+      {!terminal && scene !== "object" && <div className="tap-hint">{touchScene && !engaged ? actionLabel : "tap the world or continue"}</div>}
     </main>
   );
 }
