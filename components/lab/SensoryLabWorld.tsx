@@ -163,7 +163,7 @@ function SignalWorld({ active }: { active: boolean }) {
       const capped = active ? raw : Math.min(raw, 0.62);
       ref.current.position.x = THREE.MathUtils.lerp(-1.0, 1.0, capped);
       ref.current.position.y = 0.26 + Math.sin(raw * Math.PI) * 0.18;
-      ref.current.material && ((ref.current.material as THREE.MeshBasicMaterial).opacity = raw < 0.08 ? raw / 0.08 : raw > 0.92 ? (1 - raw) / 0.08 : 0.85);
+      (ref.current.material as THREE.MeshBasicMaterial).opacity = raw < 0.08 ? raw / 0.08 : raw > 0.92 ? (1 - raw) / 0.08 : 0.85;
     });
   });
   return (
@@ -184,11 +184,23 @@ function SignalWorld({ active }: { active: boolean }) {
   );
 }
 
-function Petal({ rotation, scale = 1, color = porcelain }: { rotation: [number, number, number]; scale?: number; color?: string }) {
+function Petal({ position, rotation, scale, color = porcelain }: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  color?: string;
+}) {
+  const shape = useMemo(() => {
+    const petal = new THREE.Shape();
+    petal.moveTo(0, -0.42);
+    petal.bezierCurveTo(-0.34, -0.13, -0.34, 0.25, 0, 0.48);
+    petal.bezierCurveTo(0.34, 0.25, 0.34, -0.13, 0, -0.42);
+    return petal;
+  }, []);
   return (
-    <mesh rotation={rotation} scale={scale}>
-      <sphereGeometry args={[0.42, 40, 22]} />
-      <meshPhysicalMaterial color={color} roughness={0.72} transmission={0.08} thickness={0.5} transparent opacity={0.9} side={THREE.DoubleSide} />
+    <mesh position={position} rotation={rotation} scale={scale}>
+      <shapeGeometry args={[shape, 30]} />
+      <meshPhysicalMaterial color={color} roughness={0.68} transmission={0.11} thickness={0.3} transparent opacity={0.92} side={THREE.DoubleSide} />
     </mesh>
   );
 }
@@ -201,22 +213,24 @@ function ThirdThing({ active, named = false }: { active: boolean; named?: boolea
     const s = damp(bloom.current.scale.x, target, 2.6, delta);
     bloom.current.scale.setScalar(s);
     bloom.current.rotation.y += delta * 0.08;
-    bloom.current.position.y = 0.22 + Math.sin(clock.elapsedTime * 0.72) * 0.045;
+    bloom.current.position.y = 0.24 + Math.sin(clock.elapsedTime * 0.72) * 0.045;
   });
   return (
     <group>
       <Node x={-1.32} active warm={active} />
       <Node x={1.32} active={named} warm={active} />
-      <group ref={bloom} scale={0.12}>
-        <Petal rotation={[0.1, 0, 0]} scale={0.85} color="#f5e5dd" />
-        <Petal rotation={[0.4, 0.75, 0.62]} scale={0.74} color="#e9c2ba" />
-        <Petal rotation={[-0.35, -0.72, -0.58]} scale={0.72} color="#f1d6cf" />
-        <Petal rotation={[1.1, 0.15, 0.15]} scale={0.54} color="#d89d92" />
-        {named && <Petal rotation={[-1.15, 0.22, -0.16]} scale={0.5} color="#f7ece8" />}
+      <group ref={bloom} scale={0.12} rotation={[0.18, 0, 0.08]}>
+        <Petal position={[0, 0.34, 0]} rotation={[0.08, 0, 0]} scale={[1.0, 1.25, 1]} color="#f6e9e2" />
+        <Petal position={[0.32, 0.08, 0.02]} rotation={[0.18, 0.22, -1.02]} scale={[0.82, 1.05, 1]} color="#e8beb5" />
+        <Petal position={[-0.32, 0.08, -0.01]} rotation={[-0.12, -0.24, 1.04]} scale={[0.84, 1.08, 1]} color="#f1d2cb" />
+        <Petal position={[0.18, -0.27, 0.04]} rotation={[0.42, 0.18, -2.35]} scale={[0.7, 0.9, 1]} color="#d89b90" />
+        <Petal position={[-0.2, -0.25, -0.03]} rotation={[-0.38, -0.14, 2.35]} scale={[0.7, 0.92, 1]} color="#efd5cf" />
+        {named && <Petal position={[0, -0.38, 0.06]} rotation={[0.5, 0, Math.PI]} scale={[0.64, 0.84, 1]} color="#fbf2ef" />}
         <mesh>
           <sphereGeometry args={[0.13, 32, 32]} />
-          <meshStandardMaterial color={amber} emissive={coral} emissiveIntensity={active ? 0.38 : 0.02} roughness={0.45} />
+          <meshStandardMaterial color={amber} emissive={coral} emissiveIntensity={active ? 0.42 : 0.02} roughness={0.42} />
         </mesh>
+        <pointLight position={[0, 0, 0.3]} intensity={active ? 1.1 : 0.05} color="#ef9d81" distance={2.3} decay={2} />
       </group>
     </group>
   );
