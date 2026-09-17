@@ -11,7 +11,7 @@ export default function Object001PrintSheetPage() {
         html,body{margin:0;background:#d7d2cb;color:#2e2927;font-family:Arial,Helvetica,sans-serif}
         .sheet{min-height:100vh;padding:24px}
         .toolbar{max-width:186mm;margin:0 auto 18px;display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-        .toolbar button{border:1px solid rgba(46,41,39,.25);background:#f5f0e8;padding:10px 14px;cursor:pointer;font:inherit;letter-spacing:inherit}
+        .print-command{border:1px solid rgba(46,41,39,.25);background:#f5f0e8;padding:10px 14px;white-space:nowrap}
         .paper{width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:14mm;box-shadow:0 20px 60px rgba(0,0,0,.14)}
         .paper-head{display:flex;justify-content:space-between;gap:10mm;padding-bottom:6mm;border-bottom:.25mm solid #d7d0c8;font-size:7pt;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
         .instructions{margin:7mm 0 10mm;max-width:132mm;color:#716862;font:9pt/1.55 Georgia,'Times New Roman',serif}
@@ -51,7 +51,7 @@ export default function Object001PrintSheetPage() {
 
       <div className="toolbar">
         <span>OBJECT 001 / 1:1 prototype sheet · print at 100% / actual size</span>
-        <button type="button" onClick={() => { if (typeof window !== "undefined") window.print(); }}>print</button>
+        <span className="print-command">Ctrl/Cmd + P</span>
       </div>
 
       <section className="paper">
