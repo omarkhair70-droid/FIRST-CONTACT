@@ -40,6 +40,7 @@ const MOBILE_CLOSURE_STYLES = `
   .relation-note { margin-top: 10px; max-width: 440px; color: var(--muted); font-family: Georgia, 'Times New Roman', serif; font-size: 14px; line-height: 1.5; }
   .completion-meter { margin: 24px 0 8px; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(48px, 12vw, 90px); font-weight: 400; letter-spacing: -.06em; line-height: .85; }
   .completion-rule { width: min(100%, 390px); height: 1px; margin: 18px 0; background: linear-gradient(90deg, var(--accent) 0 91%, var(--line) 91% 100%); }
+  .lab-flag { position: absolute; z-index: 40; top: calc(48px + env(safe-area-inset-top)); right: 16px; padding: 7px 9px; border: 1px solid var(--line); background: rgba(236,232,223,.76); backdrop-filter: blur(10px); color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; pointer-events: none; }
 
   @media (max-width: 560px) {
     .narrative { left: 16px; right: 16px; top: calc(72px + env(safe-area-inset-top)); }
@@ -57,6 +58,7 @@ const MOBILE_CLOSURE_STYLES = `
     .system-header,
     .system-footer { padding-left: 16px; padding-right: 16px; }
     .relation-note { font-size: 13px; }
+    .lab-flag { top: calc(51px + env(safe-area-inset-top)); }
   }
 
   @media (max-height: 700px) {
@@ -73,7 +75,7 @@ const MOBILE_CLOSURE_STYLES = `
   }
 `;
 
-export function FirstContactExperience() {
+export function FirstContactExperience({ labMode = false }: { labMode?: boolean }) {
   const [mode, setMode] = useState<ExperienceMode>({ kind: "intro", stage: "object" });
   const [nameDraft, setNameDraft] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
@@ -143,6 +145,15 @@ export function FirstContactExperience() {
 
   async function submitResponse(type: ResponseAction, recipientName: string, message?: string) {
     setSubmitError("");
+
+    if (labMode) {
+      setSubmitting(true);
+      await new Promise((resolve) => window.setTimeout(resolve, type === "message" ? 680 : 420));
+      if (navigator.vibrate) navigator.vibrate(type === "message" ? [16, 28, 22] : 16);
+      setSubmitting(false);
+      return true;
+    }
+
     const token = new URLSearchParams(window.location.search).get("t") ?? "";
     if (!token) {
       setSubmitError("OBJECT 001 is in preview mode. The physical object has not armed this encounter yet.");
@@ -205,7 +216,8 @@ export function FirstContactExperience() {
     <main className="experience-shell">
       <style>{MOBILE_CLOSURE_STYLES}</style>
       <div className="grain" aria-hidden="true" />
-      <header className="system-header"><span>HELLO://01</span><span>NEIGHBOR_01</span></header>
+      <header className="system-header"><span>HELLO://01</span><span>{labMode ? "SENSORY LAB" : "NEIGHBOR_01"}</span></header>
+      {labMode && <div className="lab-flag">LOCAL / NO BACKEND</div>}
 
       <section className="canvas-wrap" aria-label="Interactive first contact world">
         <Canvas camera={{ position: [0, 2.45, 7.2], fov: 37 }} dpr={[1, 1.6]} gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}>
