@@ -11,10 +11,12 @@ const ORDER: SensoryScene[] = ["object", "gap", "angle", "signal", "third", "rev
 const LAB_SCENES: SensoryScene[] = [...ORDER, "ninetysix", "unchanged"];
 const TOUCH_SCENES: SensoryScene[] = ["angle", "signal", "third"];
 
+type PersistAction = "wave" | "message" | "archive";
+
 const COPY: Partial<Record<SensoryScene, { kicker: string; title: string; body?: string; whisper?: string }>> = {
   object: { kicker: "FIELD OBJECT / 001", title: "OBJECT 001", body: "touch to wake" },
   gap: { kicker: "PROXIMITY / UNKNOWN", title: "Small distance. Unknown meaning." },
-  angle: { kicker: "REFRAME / 01", title: "The thing didn't change. The angle did.", whisper: "misalignment ≠ rejection" },
+  angle: { kicker: "REFRAME / 01", title: "The thing didn't change. The angle did.", whisper: "one angle ≠ the whole story" },
   signal: { kicker: "TRANSMISSION / 02", title: "A signal can exist without arriving." },
   third: { kicker: "SOCIAL OBJECT / 03", title: "Something third begins to live." },
   reveal: { kicker: "SHARED CONTEXT", title: "أنا عمر، جارك.", body: "وكان ممكن أقول هاي عادي. واضح إن الموضوع خرج عن السيطرة شوية.", whisper: "دي بس فرصة إن المرة الجاية ما تبدأش من صفر." },
@@ -34,7 +36,7 @@ function mood(scene: SensoryScene) {
   return "cold";
 }
 
-export function RecipientSensoryPreview() {
+export function RecipientSensoryPreview({ persistResponses = false }: { persistResponses?: boolean }) {
   const [scene, setScene] = useState<SensoryScene>("object");
   const [engaged, setEngaged] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
@@ -43,12 +45,20 @@ export function RecipientSensoryPreview() {
   const [recipientName, setRecipientName] = useState("");
   const [signalDraft, setSignalDraft] = useState("");
   const [signalOpen, setSignalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const engineRef = useRef<ReturnType<typeof createSensorySoundscape>>(null);
+  const tokenRef = useRef("");
 
   const sceneMood = mood(scene);
   const copy = COPY[scene] ?? COPY.object!;
   const terminal = ["ninetyone", "ninetysix", "unchanged"].includes(scene);
   const touchScene = TOUCH_SCENES.includes(scene);
+
+  useEffect(() => {
+    if (!persistResponses) return;
+    tokenRef.current = new URLSearchParams(window.location.search).get("t") ?? "";
+  }, [persistResponses]);
 
   useEffect(() => {
     if (!soundOn || !engineRef.current) return;
@@ -79,6 +89,7 @@ export function RecipientSensoryPreview() {
   function go(next: SensoryScene) {
     ensureSound();
     setSignalOpen(false);
+    setSubmitError("");
     setEngaged(false);
     setScene(next);
     haptic(next);
@@ -115,9 +126,41 @@ export function RecipientSensoryPreview() {
     if (navigator.vibrate) navigator.vibrate(26);
   }
 
-  function sendSignal() {
-    if (!signalDraft.trim()) return;
-    go("ninetysix");
+  async function persist(action: PersistAction, message?: string) {
+    const token = tokenRef.current;
+    if (!persistResponses || !token) return true;
+
+    setSaving(true);
+    setSubmitError("");
+    try {
+      const response = await fetch("/api/encounter/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-encounter-token": token },
+        body: JSON.stringify({ type: action, recipientName, message }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Signal failed.");
+      return true;
+    } catch {
+      setSubmitError("The signal didn't cross. Nothing was lost — try once more.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function chooseRemainder() {
+    if (await persist("wave")) go("ninetyone");
+  }
+
+  async function chooseUnchanged() {
+    if (await persist("archive")) go("unchanged");
+  }
+
+  async function sendSignal() {
+    const message = signalDraft.trim();
+    if (!message) return;
+    if (await persist("message", message)) go("ninetysix");
   }
 
   function restart() {
@@ -125,6 +168,7 @@ export function RecipientSensoryPreview() {
     setNameDraft("");
     setSignalDraft("");
     setSignalOpen(false);
+    setSubmitError("");
     setEngaged(false);
     go("object");
   }
@@ -179,6 +223,7 @@ export function RecipientSensoryPreview() {
         .name-form input,.signal-form textarea { flex:1; min-width:0; border:0; border-bottom:1px solid rgba(45,40,39,.58); border-radius:0; outline:0; padding:12px 0; background:transparent; color:var(--ink); font:400 17px/1.3 Georgia,'Times New Roman',serif; }
         .name-form input::placeholder,.signal-form textarea::placeholder { color:rgba(70,58,55,.48); }
         .name-form button,.signal-form button,.choice-panel button,.end-panel button { border:1px solid var(--line); padding:11px 13px; background:rgba(255,248,244,.48); backdrop-filter:blur(14px); color:var(--ink); cursor:pointer; font:700 8px/1 Arial,sans-serif; letter-spacing:.12em; text-transform:uppercase; }
+        .name-form button:disabled,.signal-form button:disabled,.choice-panel button:disabled { opacity:.42; cursor:default; }
         .choice-panel { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
         .choice-panel button { min-height:92px; display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; text-align:left; }
         .choice-panel b { color:var(--wine); font:400 24px/1 Georgia,'Times New Roman',serif; letter-spacing:-.03em; }
@@ -186,6 +231,7 @@ export function RecipientSensoryPreview() {
         .signal-form { display:grid; gap:10px; }
         .signal-form textarea { width:100%; resize:none; font-size:16px; }
         .signal-actions { display:flex; justify-content:space-between; gap:10px; }
+        .submit-note { margin:9px 0 0; color:var(--wine); font:500 10px/1.5 Arial,sans-serif; letter-spacing:.01em; }
         .name-ghost { position:absolute; z-index:8; right:6vw; top:19vh; writing-mode:vertical-rl; transform:rotate(180deg); color:rgba(103,47,57,.12); font:400 clamp(48px,9vw,124px)/.85 Georgia,'Times New Roman',serif; letter-spacing:.07em; pointer-events:none; opacity:${nameForArt ? 1 : 0}; transition:opacity .9s ease; }
         .end-panel { color:var(--muted); font:600 8px/1.3 Arial,sans-serif; letter-spacing:.14em; text-transform:uppercase; }
         .end-panel button { margin-top:14px; }
@@ -220,7 +266,7 @@ export function RecipientSensoryPreview() {
         </div>
       </header>
 
-      <section className="encounter-canvas" aria-label="NEIGHBOR_01 recipient sensory preview" onClick={terminal || ["name", "choice"].includes(scene) ? undefined : interactOrAdvance}>
+      <section className="encounter-canvas" aria-label="NEIGHBOR_01 sensory encounter" onClick={terminal || ["name", "choice"].includes(scene) ? undefined : interactOrAdvance}>
         <Canvas camera={{ position:[0,1.08,5.45], fov:38 }} dpr={[1,1.7]} gl={{ antialias:true, alpha:true, powerPreference:"high-performance" }}>
           <ambientLight intensity={sceneMood === "peak" ? 1.8 : sceneMood === "warm" ? 1.56 : 1.24} />
           <directionalLight position={[4,7,5]} intensity={sceneMood === "peak" ? 3 : 2.2} color={sceneMood === "cold" ? "#f5f3ef" : "#ffede2"} />
@@ -251,16 +297,18 @@ export function RecipientSensoryPreview() {
 
       {scene === "choice" && !signalOpen && (
         <div className="choice-panel">
-          <button type="button" onClick={() => go("ninetyone")}><b>91%</b><small>leave the last 9% to real life</small></button>
-          <button type="button" onClick={() => { ensureSound(); setSignalOpen(true); }}><b>SIGNAL</b><small>send one thing through</small></button>
-          <button type="button" onClick={() => go("unchanged")}><b>UNCHANGED</b><small>end without owing anything</small></button>
+          <button type="button" disabled={saving} onClick={() => void chooseRemainder()}><b>91%</b><small>leave the last 9% to real life</small></button>
+          <button type="button" disabled={saving} onClick={() => { ensureSound(); setSubmitError(""); setSignalOpen(true); }}><b>SIGNAL</b><small>send one thing through</small></button>
+          <button type="button" disabled={saving} onClick={() => void chooseUnchanged()}><b>UNCHANGED</b><small>end without owing anything</small></button>
+          {submitError && <p className="submit-note">{submitError}</p>}
         </div>
       )}
 
       {scene === "choice" && signalOpen && (
-        <form className="signal-form" onSubmit={(event) => { event.preventDefault(); sendSignal(); }}>
+        <form className="signal-form" onSubmit={(event) => { event.preventDefault(); void sendSignal(); }}>
           <textarea value={signalDraft} onChange={(event) => setSignalDraft(event.target.value)} rows={2} maxLength={280} placeholder="one sentence is enough…" />
-          <div className="signal-actions"><button type="button" onClick={() => setSignalOpen(false)}>back</button><button type="submit" disabled={!signalDraft.trim()}>send signal</button></div>
+          <div className="signal-actions"><button type="button" disabled={saving} onClick={() => { setSubmitError(""); setSignalOpen(false); }}>back</button><button type="submit" disabled={saving || !signalDraft.trim()}>{saving ? "crossing…" : "send signal"}</button></div>
+          {submitError && <p className="submit-note">{submitError}</p>}
         </form>
       )}
 
