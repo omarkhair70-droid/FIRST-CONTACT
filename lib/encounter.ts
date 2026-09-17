@@ -13,25 +13,29 @@ export type ExperienceMode =
   | { kind: "complete"; recipientName: string; action: Exclude<ResponseAction, "archive"> }
   | { kind: "archived"; recipientName: string };
 
-export const SPACE_COPY: Record<SpaceId, { label: string; code: string; line: string }> = {
+export const SPACE_COPY: Record<SpaceId, { label: string; code: string; line: string; note: string }> = {
   build: {
-    label: "BUILD",
-    code: "NOVA / TESWA",
-    line: "He has a habit of turning ‘what if?’ into things that actually run.",
+    label: "ANGLE",
+    code: "REFRAME / 01",
+    line: "The same distance can mean more than one thing.",
+    note: "Move around it before deciding what it means.",
   },
   sound: {
-    label: "SOUND",
-    code: "WZ / 2026",
-    line: "Sometimes he builds because silence gets boring.",
+    label: "SIGNAL",
+    code: "MISSED / 02",
+    line: "A signal can exist without being received.",
+    note: "Silence is not always absence. Sometimes it is just bad transmission.",
   },
   object: {
-    label: "OBJECT",
-    code: "FC / MATERIAL",
-    line: "Sometimes he doesn't know whether he's building software or making an object.",
+    label: "THIRD THING",
+    code: "SOCIAL OBJECT / 03",
+    line: "Talking through the same thing can be easier than talking directly.",
+    note: "This object exists so neither person has to carry the whole first moment alone.",
   },
   door: {
-    label: "DOOR",
-    code: "LOCK / 02 NODES",
-    line: "Locked. Requires another node.",
+    label: "REMAINDER",
+    code: "IRL / 04",
+    line: "Some part of this cannot be completed here.",
+    note: "If anything real happens, the last part has to belong to real life.",
   },
 };
