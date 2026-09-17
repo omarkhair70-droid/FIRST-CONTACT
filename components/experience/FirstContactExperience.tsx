@@ -6,15 +6,16 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { World } from "@/components/experience/World";
+import { playCue } from "@/lib/client/sonic";
 import { ExperienceMode, IntroStage, type ResponseAction, SPACE_COPY, SpaceId } from "@/lib/encounter";
 
 const INTRO_SEQUENCE: Array<{ stage: IntroStage; at: number }> = [
   { stage: "object", at: 0 },
-  { stage: "context", at: 1200 },
-  { stage: "world", at: 3200 },
-  { stage: "metrics", at: 6500 },
-  { stage: "problem", at: 9600 },
-  { stage: "inspect", at: 12600 },
+  { stage: "context", at: 1700 },
+  { stage: "world", at: 4300 },
+  { stage: "metrics", at: 7100 },
+  { stage: "problem", at: 9900 },
+  { stage: "inspect", at: 12800 },
 ];
 
 const MOBILE_CLOSURE_STYLES = `
@@ -36,6 +37,9 @@ const MOBILE_CLOSURE_STYLES = `
   .form-actions button { min-height: 44px; display: inline-flex; align-items: center; }
   .system-header { padding-top: max(18px, env(safe-area-inset-top)); }
   .system-footer { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .relation-note { margin-top: 10px; max-width: 440px; color: var(--muted); font-family: Georgia, 'Times New Roman', serif; font-size: 14px; line-height: 1.5; }
+  .completion-meter { margin: 24px 0 8px; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(48px, 12vw, 90px); font-weight: 400; letter-spacing: -.06em; line-height: .85; }
+  .completion-rule { width: min(100%, 390px); height: 1px; margin: 18px 0; background: linear-gradient(90deg, var(--accent) 0 91%, var(--line) 91% 100%); }
 
   @media (max-width: 560px) {
     .narrative { left: 16px; right: 16px; top: calc(72px + env(safe-area-inset-top)); }
@@ -46,12 +50,13 @@ const MOBILE_CLOSURE_STYLES = `
     .reveal-copy .arabic { font-size: 17px; line-height: 1.72; }
     .reveal-nodes { margin-top: 20px; gap: 9px; }
     .choice-grid { margin-top: 18px; gap: 8px; }
-    .choice-grid button { min-height: 78px; padding: 11px 12px; }
+    .choice-grid button { min-height: 82px; padding: 11px 12px; }
     .protocol-form { gap: 10px; }
     .protocol-form input,
     .protocol-form textarea { padding: 14px 0; }
     .system-header,
     .system-footer { padding-left: 16px; padding-right: 16px; }
+    .relation-note { font-size: 13px; }
   }
 
   @media (max-height: 700px) {
@@ -64,7 +69,7 @@ const MOBILE_CLOSURE_STYLES = `
     .protocol-panel,
     .protocol-form { margin-top: 14px; }
     .reveal-copy .arabic { margin-top: 10px; font-size: 15px; line-height: 1.6; }
-    .choice-grid button { min-height: 68px; }
+    .choice-grid button { min-height: 70px; }
   }
 `;
 
@@ -83,7 +88,7 @@ export function FirstContactExperience() {
 
   useEffect(() => {
     if (!copyRef.current) return;
-    gsap.fromTo(copyRef.current, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.65, ease: "power2.out", overwrite: true });
+    gsap.fromTo(copyRef.current, { opacity: 0, y: 10, filter: "blur(4px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.78, ease: "power3.out", overwrite: true });
   }, [mode]);
 
   const stage: IntroStage = mode.kind === "intro" ? mode.stage : "inspect";
@@ -91,16 +96,18 @@ export function FirstContactExperience() {
   const postReveal = !["intro", "explore"].includes(mode.kind);
   const activeSpace = mode.kind === "explore" ? mode.activeSpace : null;
   const visited = mode.kind === "explore" ? mode.visited : [];
-  const bridgeProgress = mode.kind === "complete" ? (mode.action === "message" ? 1 : 0.5) : 0;
+  const bridgeProgress = mode.kind === "complete" ? (mode.action === "message" ? 0.96 : 0.91) : 0;
   const narrativeScrollable = ["reveal", "identify", "consent", "message", "complete", "archived"].includes(mode.kind);
 
   const inspectO = useCallback(() => {
     if (mode.kind !== "intro" || mode.stage !== "inspect") return;
+    playCue("inspect");
     setMode({ kind: "explore", activeSpace: null, visited: [] });
     if (navigator.vibrate) navigator.vibrate(18);
   }, [mode]);
 
   const selectSpace = useCallback((space: SpaceId) => {
+    playCue("shift");
     setMode((current) => {
       if (current.kind !== "explore") return current;
       const visitedNext = current.visited.includes(space) ? current.visited : [...current.visited, space];
@@ -113,20 +120,20 @@ export function FirstContactExperience() {
   const activeCopy = activeSpace ? SPACE_COPY[activeSpace] : null;
 
   const headline = useMemo(() => {
-    if (mode.kind === "reveal") return "That wasn't the point.";
-    if (mode.kind === "identify") return "Identify this node.";
-    if (mode.kind === "consent") return "Connection requires consent.";
-    if (mode.kind === "message") return "Send something through.";
-    if (mode.kind === "complete") return mode.action === "message" ? "Bridge complete." : "Next encounter: IRL.";
-    if (mode.kind === "archived") return "Encounter archived.";
-    if (mode.kind === "explore") return activeCopy?.label ?? "NODE O";
+    if (mode.kind === "reveal") return "This wasn't made to explain me.";
+    if (mode.kind === "identify") return "Become the second node?";
+    if (mode.kind === "consent") return "You decide what this becomes.";
+    if (mode.kind === "message") return "Send one signal through.";
+    if (mode.kind === "complete") return "Not complete. Intentionally.";
+    if (mode.kind === "archived") return "Nothing changed. That's allowed.";
+    if (mode.kind === "explore") return activeCopy?.label ?? "THE GAP";
     switch (mode.stage) {
       case "object": return "OBJECT 001";
-      case "context": return "establishing context";
-      case "world": return "HELLO:// ENCOUNTER 001";
-      case "metrics": return "PROXIMITY HIGH";
-      case "problem": return "This appears to be a design problem.";
-      case "inspect": return "inspect node O";
+      case "context": return "mapping a very small distance";
+      case "world": return "TWO NODES / ONE GAP";
+      case "metrics": return "DISTANCE SMALL";
+      case "problem": return "MEANING UNKNOWN";
+      case "inspect": return "TOUCH O — DON'T DECIDE YET";
     }
   }, [activeCopy, mode]);
 
@@ -138,7 +145,7 @@ export function FirstContactExperience() {
     setSubmitError("");
     const token = new URLSearchParams(window.location.search).get("t") ?? "";
     if (!token) {
-      setSubmitError("OBJECT 001 is in preview mode. Arm the NFC URL with a signed token first.");
+      setSubmitError("OBJECT 001 is in preview mode. The physical object has not armed this encounter yet.");
       return false;
     }
     setSubmitting(true);
@@ -164,21 +171,32 @@ export function FirstContactExperience() {
     event.preventDefault();
     const name = nameDraft.trim().slice(0, 40);
     if (!name) return;
+    playCue("consent");
     setMode({ kind: "consent", recipientName: name });
   }
 
   async function choose(type: "wave" | "archive", recipientName: string) {
     const saved = await submitResponse(type, recipientName);
     if (!saved) return;
-    setMode(type === "archive" ? { kind: "archived", recipientName } : { kind: "complete", recipientName, action: "wave" });
+    if (type === "archive") {
+      playCue("archive");
+      setMode({ kind: "archived", recipientName });
+      return;
+    }
+    playCue("complete");
+    setMode({ kind: "complete", recipientName, action: "wave" });
   }
 
   async function sendMessage(event: FormEvent, recipientName: string) {
     event.preventDefault();
     const message = messageDraft.trim();
     if (!message) return;
+    playCue("send");
     const saved = await submitResponse("message", recipientName, message);
-    if (saved) setMode({ kind: "complete", recipientName, action: "message" });
+    if (saved) {
+      playCue("complete");
+      setMode({ kind: "complete", recipientName, action: "message" });
+    }
   }
 
   const modeKey = mode.kind === "intro" ? `intro-${mode.stage}` : mode.kind === "explore" ? `explore-${activeSpace ?? "root"}` : mode.kind;
@@ -200,29 +218,30 @@ export function FirstContactExperience() {
 
       <section className={`narrative${narrativeScrollable ? " narrative-scroll" : ""}`} ref={copyRef} key={modeKey}>
         <p className="eyebrow">
-          {mode.kind === "explore" ? activeCopy?.code ?? `${visited.length}/4 DISCOVERED` : mode.kind === "intro" ? "FIRST CONTACT PROTOCOL" : "CONNECTION PROTOCOL"}
+          {mode.kind === "explore" ? activeCopy?.code ?? `${visited.length}/4 VIEWS` : mode.kind === "intro" ? "FIRST CONTACT / FIELD TEST 001" : "SHARED OBJECT / ACTIVE"}
         </p>
         <h1>{headline}</h1>
 
-        {mode.kind === "intro" && mode.stage === "metrics" && <p className="support">INTRODUCTIONS <strong>0</strong></p>}
-        {mode.kind === "intro" && mode.stage === "inspect" && <p className="support">Touch the dark node. The rest is not a menu.</p>}
-        {mode.kind === "explore" && activeCopy && <p className="support wide">{activeCopy.line}</p>}
-        {mode.kind === "explore" && !activeCopy && <p className="support wide">Four fragments. Pick any two. Curiosity should do the rest.</p>}
-        {canReveal && <button className="quiet-action" type="button" onClick={() => setMode({ kind: "reveal" })}>enough. continue →</button>}
+        {mode.kind === "intro" && mode.stage === "metrics" && <p className="support">SHARED CONTEXT <strong>0</strong></p>}
+        {mode.kind === "intro" && mode.stage === "problem" && <p className="support wide">Small physical distance. Unknown social distance. The system cannot infer the difference.</p>}
+        {mode.kind === "intro" && mode.stage === "inspect" && <p className="support wide">One node is known. The other stays unknown unless it chooses otherwise.</p>}
+        {mode.kind === "explore" && activeCopy && <><p className="support wide">{activeCopy.line}</p><p className="relation-note">{activeCopy.note}</p></>}
+        {mode.kind === "explore" && !activeCopy && <p className="support wide">This is not a profile. It is four ways to look at the same gap. Touch any two.</p>}
+        {canReveal && <button className="quiet-action" type="button" onClick={() => { playCue("reveal"); setMode({ kind: "reveal" }); }}>change the question →</button>}
 
         {mode.kind === "reveal" && (
           <div className="reveal-copy">
-            <p>Okay. This accidentally became a portfolio.</p>
-            <p className="arabic" dir="rtl">أنا عمر، جارك. وكان ممكن أقول هاي زي بني آدم طبيعي.</p>
-            <p className="arabic muted" dir="rtl">بس للأسف دي كانت هتبقى طريقة مملة جدًا.</p>
+            <p>It was made to give two people one shared thing that did not exist before.</p>
+            <p className="arabic" dir="rtl">أنا عمر، جارك. ولو كان بينا سوء فهم، انطباع، أو حتى مفيش فهم أصلًا — مش هحاول أصلحه من شاشة.</p>
+            <p className="arabic muted" dir="rtl">دي بس فرصة إن المرة الجاية ما تبدأش من صفر.</p>
             <div className="reveal-nodes"><span>OMAR</span><i /><span>?</span></div>
-            <button className="quiet-action" type="button" onClick={() => setMode({ kind: "identify" })}>identify node ? →</button>
+            <button className="quiet-action" type="button" onClick={() => { playCue("identify"); setMode({ kind: "identify" }); }}>the other node decides →</button>
           </div>
         )}
 
         {mode.kind === "identify" && (
           <form className="protocol-form" onSubmit={identify}>
-            <p className="support wide">No profile. No account. Just the name you want this little system to know you by.</p>
+            <p className="support wide">If you want to become the second node, give it any name. No profile. No account. You can also leave it unknown.</p>
             <input
               value={nameDraft}
               onChange={(event) => setNameDraft(event.target.value)}
@@ -232,18 +251,18 @@ export function FirstContactExperience() {
               autoComplete="off"
               enterKeyHint="done"
             />
-            <button type="submit" disabled={!nameDraft.trim()}>continue →</button>
+            <button type="submit" disabled={!nameDraft.trim()}>enter the field →</button>
           </form>
         )}
 
         {mode.kind === "consent" && (
           <div className="protocol-panel">
             <div className="reveal-nodes"><span>OMAR</span><i /><span>{mode.recipientName.toUpperCase()}</span></div>
-            <p className="support wide">You control what happens next.</p>
+            <p className="support wide">Nothing here assumes what you think or what happens next.</p>
             <div className="choice-grid">
-              <button type="button" disabled={submitting} onClick={() => choose("wave", mode.recipientName)}><b>01</b><span>WAVE</span><small>say hi next time</small></button>
-              <button type="button" disabled={submitting} onClick={() => { setSubmitError(""); setMode({ kind: "message", recipientName: mode.recipientName }); }}><b>02</b><span>MESSAGE</span><small>send something now</small></button>
-              <button type="button" disabled={submitting} onClick={() => choose("archive", mode.recipientName)}><b>03</b><span>ARCHIVE</span><small>leave it here</small></button>
+              <button type="button" disabled={submitting} onClick={() => choose("wave", mode.recipientName)}><b>01</b><span>91%</span><small>leave the last 9% for real life</small></button>
+              <button type="button" disabled={submitting} onClick={() => { playCue("consent"); setSubmitError(""); setMode({ kind: "message", recipientName: mode.recipientName }); }}><b>02</b><span>SIGNAL</span><small>send one thing through</small></button>
+              <button type="button" disabled={submitting} onClick={() => choose("archive", mode.recipientName)}><b>03</b><span>UNCHANGED</span><small>end without owing anything</small></button>
             </div>
             {submitError && <p className="status-note error" role="status">{submitError}</p>}
           </div>
@@ -251,17 +270,17 @@ export function FirstContactExperience() {
 
         {mode.kind === "message" && (
           <form className="protocol-form" onSubmit={(event) => sendMessage(event, mode.recipientName)}>
-            <p className="support wide">This goes to Omar&apos;s private HELLO inbox. No Instagram redirect required.</p>
+            <p className="support wide">One sentence is enough. This is not a chat app; it is just a signal before the next real encounter.</p>
             <textarea
               value={messageDraft}
               onChange={(event) => setMessageDraft(event.target.value)}
               onFocus={(event) => keepFieldVisible(event.currentTarget)}
               maxLength={1000}
               rows={4}
-              placeholder="say anything…"
+              placeholder="send one thing…"
               enterKeyHint="send"
             />
-            <div className="form-actions"><button type="button" onClick={() => setMode({ kind: "consent", recipientName: mode.recipientName })}>← back</button><button type="submit" disabled={submitting || !messageDraft.trim()}>{submitting ? "sending…" : "send through →"}</button></div>
+            <div className="form-actions"><button type="button" onClick={() => setMode({ kind: "consent", recipientName: mode.recipientName })}>← back</button><button type="submit" disabled={submitting || !messageDraft.trim()}>{submitting ? "crossing the gap…" : "send signal →"}</button></div>
             {submitError && <p className="status-note error" role="status">{submitError}</p>}
           </form>
         )}
@@ -269,15 +288,17 @@ export function FirstContactExperience() {
         {mode.kind === "complete" && (
           <div className="protocol-panel">
             <div className="reveal-nodes"><span>OMAR</span><i className="connected" /><span>{mode.recipientName.toUpperCase()}</span></div>
-            <p className="support wide">{mode.action === "message" ? "Connection saved. Your message made it through." : "Half the bridge stays unfinished on purpose. The rest happens when you meet."}</p>
-            <p className="tiny">OBJECT 001 / CONNECTION ACCEPTED</p>
+            <div className="completion-meter">{mode.action === "message" ? "96%" : "91%"}</div>
+            <div className="completion-rule" aria-hidden="true" />
+            <p className="support wide">{mode.action === "message" ? "A signal crossed. The remaining part still cannot be completed digitally." : "Enough changed for the next meeting not to start from zero. The remaining 9% belongs to real life."}</p>
+            <p className="tiny">NEXT ENCOUNTER / IRL</p>
           </div>
         )}
 
-        {mode.kind === "archived" && <div className="protocol-panel"><p className="support wide">Nothing else will be asked. The encounter ends here.</p><p className="tiny">OBJECT 001 / CLOSED CLEANLY</p></div>}
+        {mode.kind === "archived" && <div className="protocol-panel"><p className="support wide">No explanation required. No follow-up is owed. The field closes exactly where you left it.</p><p className="tiny">OBJECT 001 / NO CLAIM MADE</p></div>}
       </section>
 
-      <footer className="system-footer"><span>OBJECT 001</span><span>{mode.kind === "complete" ? "CONNECTED" : mode.kind === "archived" ? "ARCHIVED" : mode.kind === "explore" ? `${visited.length}/4` : stage.toUpperCase()}</span></footer>
+      <footer className="system-footer"><span>OBJECT 001</span><span>{mode.kind === "complete" ? "IRL REMAINDER" : mode.kind === "archived" ? "UNCHANGED" : mode.kind === "explore" ? `${visited.length}/4 VIEWS` : stage.toUpperCase()}</span></footer>
     </main>
   );
 }
