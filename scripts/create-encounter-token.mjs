@@ -8,11 +8,16 @@ if (!secret) {
 
 const id = process.argv[2] || randomUUID();
 const artifact = process.argv[3] || "OBJECT-001";
+const publicUrl = process.argv[4] || process.env.FIRST_CONTACT_PUBLIC_URL || "https://firstcontact-rho.vercel.app";
 const payload = { id, artifact, issuedAt: Date.now() };
 const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
 const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
 const token = `${encoded}.${signature}`;
+const url = new URL(publicUrl);
+url.searchParams.set("t", token);
 
 console.log(`Encounter: ${id}`);
 console.log(`Artifact: ${artifact}`);
-console.log(`NFC URL suffix: ?t=${token}`);
+console.log(`Public base: ${url.origin}${url.pathname}`);
+console.log(`NFC / QR URL: ${url.toString()}`);
+console.log(`Token: ${token}`);
