@@ -21,13 +21,11 @@ export function FirstContactExperience() {
   const [mode, setMode] = useState<ExperienceMode>({ kind: "intro", stage: "object" });
   const [nameDraft, setNameDraft] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
-  const [token, setToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const copyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setToken(new URLSearchParams(window.location.search).get("t") ?? "");
     const timers = INTRO_SEQUENCE.slice(1).map(({ stage, at }) => window.setTimeout(() => setMode({ kind: "intro", stage }), at));
     return () => timers.forEach(window.clearTimeout);
   }, []);
@@ -82,6 +80,7 @@ export function FirstContactExperience() {
 
   async function submitResponse(type: ResponseAction, recipientName: string, message?: string) {
     setSubmitError("");
+    const token = new URLSearchParams(window.location.search).get("t") ?? "";
     if (!token) {
       setSubmitError("OBJECT 001 is in preview mode. Arm the NFC URL with a signed token first.");
       return false;
@@ -187,7 +186,7 @@ export function FirstContactExperience() {
 
         {mode.kind === "message" && (
           <form className="protocol-form" onSubmit={(event) => sendMessage(event, mode.recipientName)}>
-            <p className="support wide">This goes to Omar's private HELLO inbox. No Instagram redirect required.</p>
+            <p className="support wide">This goes to Omar&apos;s private HELLO inbox. No Instagram redirect required.</p>
             <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} maxLength={1000} rows={4} placeholder="say anything…" autoFocus />
             <div className="form-actions"><button type="button" onClick={() => setMode({ kind: "consent", recipientName: mode.recipientName })}>← back</button><button type="submit" disabled={submitting || !messageDraft.trim()}>{submitting ? "sending…" : "send through →"}</button></div>
             {submitError && <p className="status-note error">{submitError}</p>}
