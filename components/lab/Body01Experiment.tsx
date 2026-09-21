@@ -3,6 +3,10 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import {
+  createBodyVisionRuntime,
+  type BodyVisionRuntime,
+} from "../../lib/client/body-vision";
 import styles from "./Body01Experiment.module.css";
 
 type MotionSignal = {
@@ -12,6 +16,11 @@ type MotionSignal = {
   memory: number;
   corruption: number;
   calm: number;
+  openness: number;
+  ascent: number;
+  shoulderTilt: number;
+  proximity: number;
+  visionConfidence: number;
 };
 
 type AudioRig = {
@@ -22,6 +31,8 @@ type AudioRig = {
   filter: BiquadFilterNode;
 };
 
+type VisionState = "idle" | "loading" | "ready" | "fallback";
+
 const neutralSignal: MotionSignal = {
   energy: 0,
   x: 0,
@@ -29,6 +40,11 @@ const neutralSignal: MotionSignal = {
   memory: 0,
   corruption: 0,
   calm: 1,
+  openness: 0,
+  ascent: 0,
+  shoulderTilt: 0,
+  proximity: 0,
+  visionConfidence: 0,
 };
 
 const vertexShader = `
@@ -37,12 +53,18 @@ const vertexShader = `
   uniform float uMemory;
   uniform float uCorruption;
   uniform float uCalm;
+  uniform float uOpenness;
+  uniform float uAscent;
+  uniform float uShoulderTilt;
+  uniform float uProximity;
   uniform vec2 uPoint;
 
   varying vec3 vNormalView;
   varying vec3 vBasePosition;
   varying float vDisplace;
   varying float vHeat;
+  varying float vGestureLight;
+  varying float vSemanticFracture;
 
   float hash31(vec3 p) {
     p = fract(p * 0.1031);
@@ -91,22 +113,46 @@ const vertexShader = `
       (remembered * 0.16 + bladeField * 0.20) *
       smoothstep(0.28, 1.0, uCorruption);
 
+    float semanticFracture =
+      abs(uShoulderTilt) *
+      sin(p.y * 8.0 + p.z * 5.0 + uTime * 0.32) *
+      0.055;
+
     float displacement =
       breath * (0.018 + uCalm * 0.012) +
       directedWave * (0.025 + uEnergy * 0.22) +
       localPull * uEnergy * 0.17 +
       remembered * uMemory * 0.09 +
-      corruptionShape;
+      corruptionShape +
+      semanticFracture;
 
     p += normal * displacement;
+
+    float opennessBloom = 1.0 + uOpenness * 0.14;
+    float ascentStretch = 1.0 + uAscent * 0.23;
+    p.x *= opennessBloom;
+    p.y *= ascentStretch;
+
+    p.x += p.y * uShoulderTilt * 0.085;
+    p.z += normal.z * uProximity * 0.055;
 
     float lean = uCorruption * 0.08;
     p.x += sin(p.y * 2.4 + uTime * 0.45) * lean;
     p.y -= abs(p.x) * uCorruption * 0.035;
+    p.y += max(0.0, p.y) * uAscent * 0.055;
 
     vBasePosition = position;
     vDisplace = displacement;
-    vHeat = clamp(uEnergy * 0.72 + uMemory * 0.34 + uCorruption * 0.55, 0.0, 1.0);
+    vHeat = clamp(
+      uEnergy * 0.72 +
+      uMemory * 0.34 +
+      uCorruption * 0.55 +
+      uProximity * 0.12,
+      0.0,
+      1.0
+    );
+    vGestureLight = clamp(uAscent * 0.68 + uOpenness * 0.32, 0.0, 1.0);
+    vSemanticFracture = abs(uShoulderTilt);
     vNormalView = normalize(normalMatrix * normal);
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -119,11 +165,17 @@ const fragmentShader = `
   uniform float uMemory;
   uniform float uCorruption;
   uniform float uCalm;
+  uniform float uOpenness;
+  uniform float uAscent;
+  uniform float uShoulderTilt;
+  uniform float uProximity;
 
   varying vec3 vNormalView;
   varying vec3 vBasePosition;
   varying float vDisplace;
   varying float vHeat;
+  varying float vGestureLight;
+  varying float vSemanticFracture;
 
   float band(float value, float width) {
     float f = abs(fract(value) - 0.5);
@@ -156,21 +208,47 @@ const fragmentShader = `
     );
 
     float veins = max(veinA, veinB);
-    float crack = veins * smoothstep(0.30, 0.88, uCorruption);
+    float crack =
+      veins *
+      smoothstep(0.30, 0.88, uCorruption + vSemanticFracture * 0.28);
     float scar = veins * uMemory * (1.0 - uCorruption * 0.45);
 
-    vec3 color = mix(pearl, halo, uMemory * 0.38 + innerPulse * uEnergy * 0.18);
+    vec3 color = mix(
+      pearl,
+      halo,
+      uMemory * 0.38 + innerPulse * uEnergy * 0.18 + vGestureLight * 0.34
+    );
     color = mix(color, coral, vHeat * (0.22 + innerPulse * 0.34));
     color = mix(color, wine, uCorruption * (0.42 + edge * 0.36));
     color = mix(color, ash, uCorruption * uCorruption * (0.28 + edge * 0.45));
 
     vec3 veinLight = mix(halo, coral, uCorruption);
     color += veinLight * scar * (0.18 + uMemory * 0.42);
-    color = mix(color, ash, crack * (0.45 + uCorruption * 0.45));
+    color = mix(color, ash, crack * (0.38 + uCorruption * 0.45));
     color += coral * crack * innerPulse * uCorruption * 0.48;
 
+    float ascentCore =
+      exp(-3.8 * length(vBasePosition.xz)) *
+      uAscent *
+      (0.45 + innerPulse * 0.55);
+    color += halo * ascentCore * 0.62;
+
+    float openSheen =
+      uOpenness *
+      pow(max(0.0, vNormalView.z), 1.7) *
+      0.18;
+    color += pearl * openSheen;
+
+    float presenceRim = edge * uProximity * 0.20;
+    color += coral * presenceRim;
+
     float calmSheen = uCalm * (1.0 - uCorruption) * 0.12;
-    float glow = 0.86 + edge * 0.19 + vHeat * 0.14 + calmSheen;
+    float glow =
+      0.86 +
+      edge * 0.19 +
+      vHeat * 0.14 +
+      calmSheen +
+      vGestureLight * 0.08;
 
     gl_FragColor = vec4(color * glow, 1.0);
   }
@@ -215,6 +293,26 @@ function LivingMatter({
         signal.calm,
         blendSlow,
       );
+      material.uniforms.uOpenness.value = THREE.MathUtils.lerp(
+        material.uniforms.uOpenness.value,
+        signal.openness,
+        blendFast,
+      );
+      material.uniforms.uAscent.value = THREE.MathUtils.lerp(
+        material.uniforms.uAscent.value,
+        signal.ascent,
+        blendFast,
+      );
+      material.uniforms.uShoulderTilt.value = THREE.MathUtils.lerp(
+        material.uniforms.uShoulderTilt.value,
+        signal.shoulderTilt,
+        blendFast,
+      );
+      material.uniforms.uProximity.value = THREE.MathUtils.lerp(
+        material.uniforms.uProximity.value,
+        signal.proximity,
+        blendFast,
+      );
 
       targetPointRef.current.set(signal.x, signal.y);
       material.uniforms.uPoint.value.lerp(targetPointRef.current, blendFast);
@@ -234,18 +332,20 @@ function LivingMatter({
       );
       mesh.rotation.z = THREE.MathUtils.lerp(
         mesh.rotation.z,
-        signal.x * fall * 0.18,
-        Math.min(1, delta * 2.2),
+        signal.x * fall * 0.18 + signal.shoulderTilt * 0.18,
+        Math.min(1, delta * 2.8),
       );
 
       const scale =
         1 +
         signal.energy * 0.08 +
         signal.memory * 0.035 -
-        signal.corruption * 0.025;
+        signal.corruption * 0.025 +
+        signal.proximity * 0.06;
+
       targetScaleRef.current.set(
-        scale * (1 - signal.corruption * 0.035),
-        scale * (1 + signal.calm * 0.025),
+        scale * (1 + signal.openness * 0.06 - signal.corruption * 0.035),
+        scale * (1 + signal.calm * 0.025 + signal.ascent * 0.09),
         scale,
       );
       mesh.scale.lerp(targetScaleRef.current, Math.min(1, delta * 4.0));
@@ -263,6 +363,10 @@ function LivingMatter({
           uMemory: { value: 0 },
           uCorruption: { value: 0 },
           uCalm: { value: 1 },
+          uOpenness: { value: 0 },
+          uAscent: { value: 0 },
+          uShoulderTilt: { value: 0 },
+          uProximity: { value: 0 },
           uPoint: { value: new THREE.Vector2(0, 0) },
         }}
         vertexShader={vertexShader}
@@ -293,15 +397,18 @@ export default function Body01Experiment() {
     "idle" | "requesting" | "live" | "error"
   >("idle");
   const [error, setError] = useState("");
+  const [visionState, setVisionState] = useState<VisionState>("idle");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const analysisCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastAnalyzeRef = useRef(0);
+  const lastVisionAnalyzeRef = useRef(0);
   const previousLumaRef = useRef<Uint8Array | null>(null);
   const signalRef = useRef<MotionSignal>({ ...neutralSignal });
   const audioRef = useRef<AudioRig | null>(null);
+  const visionRef = useRef<BodyVisionRuntime | null>(null);
 
   const stopMedia = useCallback(() => {
     if (rafRef.current !== null) {
@@ -311,6 +418,9 @@ export default function Body01Experiment() {
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+
+    visionRef.current?.close();
+    visionRef.current = null;
 
     if (audioRef.current) {
       audioRef.current.oscillators.forEach((oscillator) => {
@@ -368,6 +478,36 @@ export default function Body01Experiment() {
       filter,
     };
   }, []);
+
+  useEffect(() => {
+    if (status !== "live") {
+      setVisionState("idle");
+      return;
+    }
+
+    let cancelled = false;
+    setVisionState("loading");
+
+    void createBodyVisionRuntime()
+      .then((runtime) => {
+        if (cancelled) {
+          runtime.close();
+          return;
+        }
+
+        visionRef.current = runtime;
+        setVisionState("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setVisionState("fallback");
+      });
+
+    return () => {
+      cancelled = true;
+      visionRef.current?.close();
+      visionRef.current = null;
+    };
+  }, [status]);
 
   useEffect(() => {
     if (status !== "live") return;
@@ -484,24 +624,96 @@ export default function Body01Experiment() {
         );
       }
 
+      const vision = visionRef.current;
+      if (vision && time - lastVisionAnalyzeRef.current >= 105) {
+        lastVisionAnalyzeRef.current = time;
+
+        try {
+          const pose = vision.detect(video, time);
+
+          if (pose) {
+            const semanticBlend = 0.22;
+            signal.visionConfidence = THREE.MathUtils.lerp(
+              signal.visionConfidence,
+              pose.confidence,
+              0.28,
+            );
+            signal.openness = THREE.MathUtils.lerp(
+              signal.openness,
+              pose.openness,
+              semanticBlend,
+            );
+            signal.ascent = THREE.MathUtils.lerp(
+              signal.ascent,
+              pose.ascent,
+              semanticBlend,
+            );
+            signal.shoulderTilt = THREE.MathUtils.lerp(
+              signal.shoulderTilt,
+              pose.shoulderTilt,
+              semanticBlend,
+            );
+            signal.proximity = THREE.MathUtils.lerp(
+              signal.proximity,
+              pose.proximity,
+              semanticBlend,
+            );
+
+            signal.x = THREE.MathUtils.lerp(
+              signal.x,
+              pose.centerX,
+              0.075 * pose.confidence,
+            );
+            signal.y = THREE.MathUtils.lerp(
+              signal.y,
+              pose.centerY,
+              0.055 * pose.confidence,
+            );
+          } else {
+            signal.visionConfidence *= 0.84;
+            signal.openness *= 0.90;
+            signal.ascent *= 0.90;
+            signal.shoulderTilt *= 0.88;
+            signal.proximity *= 0.92;
+          }
+        } catch {
+          signal.visionConfidence *= 0.90;
+        }
+      } else if (!vision) {
+        signal.visionConfidence *= 0.96;
+        signal.openness *= 0.97;
+        signal.ascent *= 0.97;
+        signal.shoulderTilt *= 0.96;
+        signal.proximity *= 0.98;
+      }
+
       const audio = audioRef.current;
       if (audio) {
         const now = audio.context.currentTime;
         const corruption = signal.corruption;
         const calm = signal.calm;
         const memory = signal.memory;
+        const semantic =
+          signal.visionConfidence *
+          (signal.ascent * 0.55 + signal.openness * 0.25);
 
         audio.master.gain.setTargetAtTime(
           0.003 +
             signal.energy * 0.034 +
             memory * 0.006 +
-            corruption * 0.005,
+            corruption * 0.005 +
+            signal.proximity * signal.visionConfidence * 0.004,
           now,
           0.08,
         );
 
         audio.panner.pan.setTargetAtTime(
-          THREE.MathUtils.clamp(signal.x * (0.65 + corruption * 0.28), -1, 1),
+          THREE.MathUtils.clamp(
+            signal.x * (0.65 + corruption * 0.28) +
+              signal.shoulderTilt * signal.visionConfidence * 0.16,
+            -1,
+            1,
+          ),
           now,
           0.06,
         );
@@ -511,16 +723,19 @@ export default function Body01Experiment() {
           signal.energy * 22 +
           signal.y * 6 -
           corruption * 17 +
-          calm * 3;
+          calm * 3 +
+          signal.ascent * signal.visionConfidence * 14;
 
         audio.oscillators[0].frequency.setTargetAtTime(base, now, 0.11);
         audio.oscillators[1].frequency.setTargetAtTime(
-          base * (2.0 + corruption * 0.028),
+          base * (2.0 + corruption * 0.028 + semantic * 0.012),
           now,
           0.09,
         );
         audio.oscillators[1].detune.setTargetAtTime(
-          corruption * 38 - calm * 3,
+          corruption * 38 -
+            calm * 3 -
+            signal.openness * signal.visionConfidence * 6,
           now,
           0.12,
         );
@@ -529,12 +744,13 @@ export default function Body01Experiment() {
           1350 -
             corruption * 820 +
             signal.energy * 460 +
-            calm * 180,
+            calm * 180 +
+            semantic * 680,
           now,
           0.10,
         );
         audio.filter.Q.setTargetAtTime(
-          0.7 + corruption * 5.0,
+          0.7 + corruption * 5.0 - semantic * 0.35,
           now,
           0.14,
         );
@@ -585,6 +801,7 @@ export default function Body01Experiment() {
       await videoRef.current.play();
 
       previousLumaRef.current = null;
+      lastVisionAnalyzeRef.current = 0;
       signalRef.current = { ...neutralSignal };
       setStatus("live");
     } catch (reason) {
@@ -595,6 +812,13 @@ export default function Body01Experiment() {
       setStatus("error");
     }
   }, [createAudio, stopMedia]);
+
+  const visionLabel =
+    visionState === "ready"
+      ? "POSE ONLINE"
+      : visionState === "fallback"
+        ? "MOTION MODE"
+        : "VISION WAKING";
 
   return (
     <main className={styles.shell}>
@@ -616,11 +840,11 @@ export default function Body01Experiment() {
 
       {status !== "live" ? (
         <section className={styles.gate}>
-          <div className={styles.kicker}>BODY://01 · FALLEN LIGHT</div>
-          <h1>NO BUTTONS</h1>
+          <div className={styles.kicker}>BODY://01 · VISION://01</div>
+          <h1>FALLEN LIGHT</h1>
           <p className={styles.thesis}>
-            Move and it remembers. Push it and the material falls. Become still
-            and it can find another form.
+            Move and it remembers. Open, rise, tilt, approach — the material
+            reads the posture, not only the motion.
           </p>
 
           <button
@@ -633,8 +857,8 @@ export default function Body01Experiment() {
           </button>
 
           <p className={styles.privacy}>
-            Motion is analyzed locally in your browser. The camera stream is
-            neither recorded nor uploaded by this experiment.
+            Camera frames are processed locally for motion and pose. This
+            experiment does not upload or record the camera stream.
           </p>
 
           {status === "error" ? (
@@ -644,7 +868,7 @@ export default function Body01Experiment() {
       ) : (
         <div className={styles.liveMark} aria-hidden="true">
           <span>FALLEN LIGHT</span>
-          <span>MOVE / THEN STOP</span>
+          <span>{visionLabel}</span>
         </div>
       )}
     </main>
