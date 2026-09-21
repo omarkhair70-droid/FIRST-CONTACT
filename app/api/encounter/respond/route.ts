@@ -23,7 +23,6 @@ export async function POST(request: Request) {
 
   const recipientName = cleanText(body.recipientName, 40);
   const type = body.type as ResponseAction;
-  if (!recipientName) return Response.json({ error: "A node name is required." }, { status: 400 });
   if (!(["wave", "message", "archive"] as ResponseAction[]).includes(type)) {
     return Response.json({ error: "Unknown response type." }, { status: 400 });
   }
