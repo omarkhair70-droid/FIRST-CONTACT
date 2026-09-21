@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import styles from "./Body01Experiment.module.css";
 
@@ -20,122 +20,127 @@ type AudioRig = {
 
 const neutralSignal: MotionSignal = { energy: 0, x: 0, y: 0 };
 
+const vertexShader = `
+  uniform float uTime;
+  uniform float uEnergy;
+  uniform vec2 uPoint;
+
+  varying vec3 vNormalView;
+  varying float vDisplace;
+  varying float vEnergy;
+
+  void main() {
+    vec3 p = position;
+    float directional =
+      sin((p.y + uPoint.y * 0.65) * 4.0 + uTime * 1.15) *
+      cos((p.x - uPoint.x * 0.65) * 3.2 - uTime * 0.82);
+
+    float breathing = sin(uTime * 0.72 + p.y * 2.4) * 0.5 + 0.5;
+    float localPull = exp(-3.2 * distance(p.xy, uPoint * 0.78));
+    float displacement =
+      directional * (0.045 + uEnergy * 0.24) +
+      breathing * 0.025 +
+      localPull * uEnergy * 0.15;
+
+    p += normal * displacement;
+
+    vDisplace = displacement;
+    vEnergy = uEnergy;
+    vNormalView = normalize(normalMatrix * normal);
+
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  }
+`;
+
+const fragmentShader = `
+  uniform float uTime;
+  uniform float uEnergy;
+  uniform vec2 uPoint;
+
+  varying vec3 vNormalView;
+  varying float vDisplace;
+  varying float vEnergy;
+
+  void main() {
+    vec3 chalk = vec3(0.90, 0.86, 0.79);
+    vec3 clay = vec3(0.67, 0.29, 0.22);
+    vec3 ember = vec3(0.96, 0.47, 0.26);
+    vec3 wine = vec3(0.22, 0.07, 0.09);
+
+    float edge = pow(1.0 - abs(vNormalView.z), 2.2);
+    float pulse = 0.5 + 0.5 * sin(uTime * 1.5 + vDisplace * 19.0);
+    float heat = clamp(vEnergy * 0.92 + max(vDisplace, 0.0) * 2.2, 0.0, 1.0);
+
+    vec3 base = mix(chalk, clay, heat * 0.66);
+    base = mix(base, ember, heat * pulse * 0.58);
+    base = mix(base, wine, edge * (0.24 + vEnergy * 0.24));
+
+    float glow = 0.88 + edge * 0.22 + heat * 0.16;
+    gl_FragColor = vec4(base * glow, 1.0);
+  }
+`;
+
 function LivingMatter({
   signalRef,
 }: {
   signalRef: React.MutableRefObject<MotionSignal>;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        uniforms: {
-          uTime: { value: 0 },
-          uEnergy: { value: 0 },
-          uPoint: { value: new THREE.Vector2(0, 0) },
-        },
-        vertexShader: `
-          uniform float uTime;
-          uniform float uEnergy;
-          uniform vec2 uPoint;
-
-          varying vec3 vNormalView;
-          varying float vDisplace;
-          varying float vEnergy;
-
-          void main() {
-            vec3 p = position;
-            float directional =
-              sin((p.y + uPoint.y * 0.65) * 4.0 + uTime * 1.15) *
-              cos((p.x - uPoint.x * 0.65) * 3.2 - uTime * 0.82);
-
-            float breathing = sin(uTime * 0.72 + p.y * 2.4) * 0.5 + 0.5;
-            float localPull = exp(-3.2 * distance(p.xy, uPoint * 0.78));
-            float displacement =
-              directional * (0.045 + uEnergy * 0.24) +
-              breathing * 0.025 +
-              localPull * uEnergy * 0.15;
-
-            p += normal * displacement;
-
-            vDisplace = displacement;
-            vEnergy = uEnergy;
-            vNormalView = normalize(normalMatrix * normal);
-
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform float uTime;
-          uniform float uEnergy;
-          uniform vec2 uPoint;
-
-          varying vec3 vNormalView;
-          varying float vDisplace;
-          varying float vEnergy;
-
-          void main() {
-            vec3 chalk = vec3(0.90, 0.86, 0.79);
-            vec3 clay = vec3(0.67, 0.29, 0.22);
-            vec3 ember = vec3(0.96, 0.47, 0.26);
-            vec3 wine = vec3(0.22, 0.07, 0.09);
-
-            float edge = pow(1.0 - abs(vNormalView.z), 2.2);
-            float pulse = 0.5 + 0.5 * sin(uTime * 1.5 + vDisplace * 19.0);
-            float heat = clamp(vEnergy * 0.92 + max(vDisplace, 0.0) * 2.2, 0.0, 1.0);
-
-            vec3 base = mix(chalk, clay, heat * 0.66);
-            base = mix(base, ember, heat * pulse * 0.58);
-            base = mix(base, wine, edge * (0.24 + vEnergy * 0.24));
-
-            float glow = 0.88 + edge * 0.22 + heat * 0.16;
-            gl_FragColor = vec4(base * glow, 1.0);
-          }
-        `,
-      }),
-    [],
-  );
-
-  useEffect(() => () => material.dispose(), [material]);
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
+  const targetPointRef = useRef(new THREE.Vector2());
+  const targetScaleRef = useRef(new THREE.Vector3(1, 1, 1));
 
   useFrame(({ clock }, delta) => {
     const signal = signalRef.current;
-    material.uniforms.uTime.value = clock.elapsedTime;
-    material.uniforms.uEnergy.value = THREE.MathUtils.lerp(
-      material.uniforms.uEnergy.value,
-      signal.energy,
-      Math.min(1, delta * 7),
-    );
-    material.uniforms.uPoint.value.lerp(
-      new THREE.Vector2(signal.x, signal.y),
-      Math.min(1, delta * 5),
-    );
+    const material = materialRef.current;
+    const mesh = meshRef.current;
 
-    if (meshRef.current) {
-      meshRef.current.rotation.y = THREE.MathUtils.lerp(
-        meshRef.current.rotation.y,
+    if (material) {
+      material.uniforms.uTime.value = clock.elapsedTime;
+      material.uniforms.uEnergy.value = THREE.MathUtils.lerp(
+        material.uniforms.uEnergy.value,
+        signal.energy,
+        Math.min(1, delta * 7),
+      );
+
+      targetPointRef.current.set(signal.x, signal.y);
+      material.uniforms.uPoint.value.lerp(
+        targetPointRef.current,
+        Math.min(1, delta * 5),
+      );
+    }
+
+    if (mesh) {
+      mesh.rotation.y = THREE.MathUtils.lerp(
+        mesh.rotation.y,
         signal.x * 0.58,
         Math.min(1, delta * 3.4),
       );
-      meshRef.current.rotation.x = THREE.MathUtils.lerp(
-        meshRef.current.rotation.x,
+      mesh.rotation.x = THREE.MathUtils.lerp(
+        mesh.rotation.x,
         -signal.y * 0.36,
         Math.min(1, delta * 3.4),
       );
 
       const scale = 1 + signal.energy * 0.11;
-      meshRef.current.scale.lerp(
-        new THREE.Vector3(scale, scale, scale),
-        Math.min(1, delta * 4.4),
-      );
+      targetScaleRef.current.set(scale, scale, scale);
+      mesh.scale.lerp(targetScaleRef.current, Math.min(1, delta * 4.4));
     }
   });
 
   return (
     <mesh ref={meshRef}>
-      <icosahedronGeometry args={[1.12, 6]} />
-      <primitive object={material} attach="material" />
+      <icosahedronGeometry args={[1.12, 5]} />
+      <shaderMaterial
+        ref={materialRef}
+        uniforms={{
+          uTime: { value: 0 },
+          uEnergy: { value: 0 },
+          uPoint: { value: new THREE.Vector2(0, 0) },
+        }}
+        vertexShader={vertexShader}
+        fragmentShader={fragmentShader}
+      />
     </mesh>
   );
 }
@@ -231,110 +236,127 @@ export default function Body01Experiment() {
     };
   }, []);
 
-  const analyzeFrame = useCallback((time: number) => {
-    const video = videoRef.current;
-    const canvas = analysisCanvasRef.current;
+  useEffect(() => {
+    if (status !== "live") return;
 
-    if (!video || !canvas || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(analyzeFrame);
-      return;
-    }
+    function analyzeFrame(time: number) {
+      const video = videoRef.current;
+      const canvas = analysisCanvasRef.current;
 
-    if (time - lastAnalyzeRef.current < 58) {
-      rafRef.current = requestAnimationFrame(analyzeFrame);
-      return;
-    }
-    lastAnalyzeRef.current = time;
+      if (!video || !canvas || video.readyState < 2) {
+        rafRef.current = requestAnimationFrame(analyzeFrame);
+        return;
+      }
 
-    const width = 48;
-    const height = 36;
-    canvas.width = width;
-    canvas.height = height;
+      if (time - lastAnalyzeRef.current < 58) {
+        rafRef.current = requestAnimationFrame(analyzeFrame);
+        return;
+      }
+      lastAnalyzeRef.current = time;
 
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) {
-      rafRef.current = requestAnimationFrame(analyzeFrame);
-      return;
-    }
+      const width = 48;
+      const height = 36;
+      canvas.width = width;
+      canvas.height = height;
 
-    ctx.drawImage(video, 0, 0, width, height);
-    const pixels = ctx.getImageData(0, 0, width, height).data;
-    const current = new Uint8Array(width * height);
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        rafRef.current = requestAnimationFrame(analyzeFrame);
+        return;
+      }
 
-    let weight = 0;
-    let weightedX = 0;
-    let weightedY = 0;
+      ctx.drawImage(video, 0, 0, width, height);
+      const pixels = ctx.getImageData(0, 0, width, height).data;
+      const current = new Uint8Array(width * height);
 
-    const previous = previousLumaRef.current;
+      let weight = 0;
+      let weightedX = 0;
+      let weightedY = 0;
 
-    for (let i = 0; i < width * height; i += 1) {
-      const offset = i * 4;
-      const luma =
-        (pixels[offset] * 3 + pixels[offset + 1] * 4 + pixels[offset + 2]) >> 3;
-      current[i] = luma;
+      const previous = previousLumaRef.current;
 
-      if (previous) {
-        const diff = Math.abs(luma - previous[i]);
-        if (diff > 18) {
-          const motion = diff - 18;
-          const x = i % width;
-          const y = Math.floor(i / width);
-          weight += motion;
-          weightedX += x * motion;
-          weightedY += y * motion;
+      for (let i = 0; i < width * height; i += 1) {
+        const offset = i * 4;
+        const luma =
+          (pixels[offset] * 3 +
+            pixels[offset + 1] * 4 +
+            pixels[offset + 2]) >>
+          3;
+        current[i] = luma;
+
+        if (previous) {
+          const diff = Math.abs(luma - previous[i]);
+          if (diff > 18) {
+            const motion = diff - 18;
+            const x = i % width;
+            const y = Math.floor(i / width);
+            weight += motion;
+            weightedX += x * motion;
+            weightedY += y * motion;
+          }
         }
       }
-    }
 
-    previousLumaRef.current = current;
+      previousLumaRef.current = current;
 
-    const targetEnergy = Math.min(1, weight / (width * height * 42));
-    const targetX =
-      weight > 0
-        ? 1 - (weightedX / weight / (width - 1)) * 2
-        : signalRef.current.x * 0.92;
-    const targetY =
-      weight > 0
-        ? 1 - (weightedY / weight / (height - 1)) * 2
-        : signalRef.current.y * 0.92;
+      const targetEnergy = Math.min(1, weight / (width * height * 42));
+      const targetX =
+        weight > 0
+          ? 1 - (weightedX / weight / (width - 1)) * 2
+          : signalRef.current.x * 0.92;
+      const targetY =
+        weight > 0
+          ? 1 - (weightedY / weight / (height - 1)) * 2
+          : signalRef.current.y * 0.92;
 
-    signalRef.current.energy = THREE.MathUtils.lerp(
-      signalRef.current.energy,
-      targetEnergy,
-      targetEnergy > signalRef.current.energy ? 0.28 : 0.1,
-    );
-    signalRef.current.x = THREE.MathUtils.lerp(
-      signalRef.current.x,
-      targetX,
-      0.16,
-    );
-    signalRef.current.y = THREE.MathUtils.lerp(
-      signalRef.current.y,
-      targetY,
-      0.16,
-    );
-
-    const audio = audioRef.current;
-    if (audio) {
-      const now = audio.context.currentTime;
-      audio.master.gain.setTargetAtTime(
-        0.004 + signalRef.current.energy * 0.038,
-        now,
-        0.08,
+      signalRef.current.energy = THREE.MathUtils.lerp(
+        signalRef.current.energy,
+        targetEnergy,
+        targetEnergy > signalRef.current.energy ? 0.28 : 0.1,
       );
-      audio.panner.pan.setTargetAtTime(
-        THREE.MathUtils.clamp(signalRef.current.x * 0.82, -1, 1),
-        now,
-        0.06,
+      signalRef.current.x = THREE.MathUtils.lerp(
+        signalRef.current.x,
+        targetX,
+        0.16,
+      );
+      signalRef.current.y = THREE.MathUtils.lerp(
+        signalRef.current.y,
+        targetY,
+        0.16,
       );
 
-      const base = 82 + signalRef.current.energy * 24 + signalRef.current.y * 7;
-      audio.oscillators[0].frequency.setTargetAtTime(base, now, 0.09);
-      audio.oscillators[1].frequency.setTargetAtTime(base * 2.01, now, 0.09);
+      const audio = audioRef.current;
+      if (audio) {
+        const now = audio.context.currentTime;
+        audio.master.gain.setTargetAtTime(
+          0.004 + signalRef.current.energy * 0.038,
+          now,
+          0.08,
+        );
+        audio.panner.pan.setTargetAtTime(
+          THREE.MathUtils.clamp(signalRef.current.x * 0.82, -1, 1),
+          now,
+          0.06,
+        );
+
+        const base =
+          82 + signalRef.current.energy * 24 + signalRef.current.y * 7;
+        audio.oscillators[0].frequency.setTargetAtTime(base, now, 0.09);
+        audio.oscillators[1].frequency.setTargetAtTime(base * 2.01, now, 0.09);
+      }
+
+      rafRef.current = requestAnimationFrame(analyzeFrame);
     }
 
     rafRef.current = requestAnimationFrame(analyzeFrame);
-  }, []);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [status]);
 
   const enter = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -370,7 +392,6 @@ export default function Body01Experiment() {
       previousLumaRef.current = null;
       signalRef.current = { ...neutralSignal };
       setStatus("live");
-      rafRef.current = requestAnimationFrame(analyzeFrame);
     } catch (reason) {
       stopMedia();
       const message =
@@ -378,7 +399,7 @@ export default function Body01Experiment() {
       setError(message);
       setStatus("error");
     }
-  }, [analyzeFrame, createAudio, stopMedia]);
+  }, [createAudio, stopMedia]);
 
   return (
     <main className={styles.shell}>
