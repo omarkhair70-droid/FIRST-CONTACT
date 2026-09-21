@@ -126,6 +126,16 @@ export function RecipientSensoryPreview({ persistResponses = false }: { persistR
     if (navigator.vibrate) navigator.vibrate(26);
   }
 
+  function skipName() {
+    ensureSound();
+    setRecipientName("");
+    setNameDraft("");
+    setEngaged(true);
+    setScene("choice");
+    engineRef.current?.accent("name");
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
   async function persist(action: PersistAction, message?: string) {
     const token = tokenRef.current;
     if (!persistResponses || !token) return true;
@@ -219,7 +229,7 @@ export function RecipientSensoryPreview({ persistResponses = false }: { persistR
         .encounter-continue { position:absolute; z-index:16; left:6vw; bottom:11vh; border:0; border-bottom:1px solid currentColor; padding:7px 0; background:transparent; color:var(--ink); cursor:pointer; font:700 9px/1 Arial,sans-serif; letter-spacing:.13em; text-transform:uppercase; }
         .encounter-wake { position:absolute; z-index:16; left:50%; bottom:12vh; transform:translateX(-50%); min-width:150px; border:1px solid var(--line); border-radius:999px; padding:13px 18px; background:rgba(252,248,243,.54); backdrop-filter:blur(16px); color:var(--ink); cursor:pointer; font:700 9px/1 Arial,sans-serif; letter-spacing:.15em; text-transform:uppercase; }
         .name-form,.choice-panel,.signal-form,.end-panel { position:absolute; z-index:18; left:6vw; bottom:9vh; width:min(500px,88vw); }
-        .name-form { display:flex; align-items:flex-end; gap:14px; }
+        .name-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:end; gap:10px; }
         .name-form input,.signal-form textarea { flex:1; min-width:0; border:0; border-bottom:1px solid rgba(45,40,39,.58); border-radius:0; outline:0; padding:12px 0; background:transparent; color:var(--ink); font:400 17px/1.3 Georgia,'Times New Roman',serif; }
         .name-form input::placeholder,.signal-form textarea::placeholder { color:rgba(70,58,55,.48); }
         .name-form button,.signal-form button,.choice-panel button,.end-panel button { border:1px solid var(--line); padding:11px 13px; background:rgba(255,248,244,.48); backdrop-filter:blur(14px); color:var(--ink); cursor:pointer; font:700 8px/1 Arial,sans-serif; letter-spacing:.12em; text-transform:uppercase; }
@@ -249,6 +259,8 @@ export function RecipientSensoryPreview({ persistResponses = false }: { persistR
           .encounter-continue { left:16px; bottom:19vh; }
           .encounter-wake { bottom:16vh; }
           .name-form,.choice-panel,.signal-form,.end-panel { left:16px; right:16px; bottom:max(62px,calc(7vh + env(safe-area-inset-bottom))); width:auto; }
+          .name-form { grid-template-columns:minmax(0,1fr) auto; }
+          .name-form .skip-name { grid-column:1 / -1; justify-self:start; border:0; padding:5px 0; background:transparent; color:var(--muted); }
           .choice-panel { grid-template-columns:1fr; gap:6px; }
           .choice-panel button { min-height:58px; flex-direction:row; align-items:center; }
           .choice-panel small { max-width:46%; text-align:right; }
@@ -290,8 +302,9 @@ export function RecipientSensoryPreview({ persistResponses = false }: { persistR
 
       {scene === "name" && (
         <form className="name-form" onSubmit={(event) => { event.preventDefault(); acceptName(); }}>
-          <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} placeholder="name / nickname" maxLength={40} autoComplete="off" />
+          <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} placeholder="name / nickname · optional" maxLength={40} autoComplete="off" />
           <button type="submit" disabled={!nameDraft.trim()}>enter field</button>
+          <button className="skip-name" type="button" onClick={skipName}>continue unnamed</button>
         </form>
       )}
 
