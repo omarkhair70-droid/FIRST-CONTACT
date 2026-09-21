@@ -157,17 +157,26 @@ Observe, without coaching:
 
 Do not optimize for whether they “like Omar.” Optimize for whether the encounter is clear, safe, memorable, and leaves agency intact.
 
-## J. Merge gate
+## J. Software merge gate
 
-Merge PR #4 only after:
-- CI lint green
-- CI build green
-- latest recipient route visually reviewed on a real phone
-- signed response path verified end-to-end
-- 1:1 paper prototype physically inspected
-- NFC prototype tap range verified
-- final production URL chosen
-- final signed OBJECT 001 token generated
-- final QR generated from that exact URL and tested
+PR #4 may merge when:
+- CI lint is green
+- CI build is green
+- the latest Vercel deployment for the exact head SHA is READY
+- the recipient route has been exercised on a real phone
+- no known blocking interaction, layout, or audio regression remains
 
-After merge, create the final physical OBJECT 001 and encode the same URL into NFC and QR. No further conceptual redesign should happen after final fabrication unless a real QA failure requires it.
+Merging closes the software/experience implementation. It does **not** authorize final physical handoff by itself.
+
+## K. Physical delivery gate — post-merge
+
+Before the real OBJECT 001 is fabricated and handed off:
+- verify the signed response path end-to-end with fresh encounter IDs
+- physically inspect the 1:1 paper prototype
+- verify NFC prototype tap range on multiple phones
+- choose the final production URL
+- generate the final signed OBJECT 001 token
+- generate and test the final QR from that exact URL
+- run one uncoached handoff simulation with the physical sleeve/object
+
+After the physical gate passes, fabricate the final OBJECT 001 and encode the same signed URL into NFC and QR. No conceptual redesign should happen after final fabrication unless a real QA failure requires it.
