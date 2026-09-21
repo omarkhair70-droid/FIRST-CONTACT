@@ -480,13 +480,9 @@ export default function Body01Experiment() {
   }, []);
 
   useEffect(() => {
-    if (status !== "live") {
-      setVisionState("idle");
-      return;
-    }
+    if (status !== "live") return;
 
     let cancelled = false;
-    setVisionState("loading");
 
     void createBodyVisionRuntime()
       .then((runtime) => {
@@ -803,9 +799,11 @@ export default function Body01Experiment() {
       previousLumaRef.current = null;
       lastVisionAnalyzeRef.current = 0;
       signalRef.current = { ...neutralSignal };
+      setVisionState("loading");
       setStatus("live");
     } catch (reason) {
       stopMedia();
+      setVisionState("idle");
       const message =
         reason instanceof Error ? reason.message : "Camera permission failed.";
       setError(message);
