@@ -9,6 +9,9 @@ type MotionSignal = {
   energy: number;
   x: number;
   y: number;
+  memory: number;
+  corruption: number;
+  calm: number;
 };
 
 type AudioRig = {
@@ -16,36 +19,94 @@ type AudioRig = {
   oscillators: OscillatorNode[];
   master: GainNode;
   panner: StereoPannerNode;
+  filter: BiquadFilterNode;
 };
 
-const neutralSignal: MotionSignal = { energy: 0, x: 0, y: 0 };
+const neutralSignal: MotionSignal = {
+  energy: 0,
+  x: 0,
+  y: 0,
+  memory: 0,
+  corruption: 0,
+  calm: 1,
+};
 
 const vertexShader = `
   uniform float uTime;
   uniform float uEnergy;
+  uniform float uMemory;
+  uniform float uCorruption;
+  uniform float uCalm;
   uniform vec2 uPoint;
 
   varying vec3 vNormalView;
+  varying vec3 vBasePosition;
   varying float vDisplace;
-  varying float vEnergy;
+  varying float vHeat;
+
+  float hash31(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+  }
+
+  float noise3(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    return mix(
+      mix(
+        mix(hash31(i + vec3(0.0, 0.0, 0.0)), hash31(i + vec3(1.0, 0.0, 0.0)), f.x),
+        mix(hash31(i + vec3(0.0, 1.0, 0.0)), hash31(i + vec3(1.0, 1.0, 0.0)), f.x),
+        f.y
+      ),
+      mix(
+        mix(hash31(i + vec3(0.0, 0.0, 1.0)), hash31(i + vec3(1.0, 0.0, 1.0)), f.x),
+        mix(hash31(i + vec3(0.0, 1.0, 1.0)), hash31(i + vec3(1.0, 1.0, 1.0)), f.x),
+        f.y
+      ),
+      f.z
+    );
+  }
 
   void main() {
     vec3 p = position;
-    float directional =
-      sin((p.y + uPoint.y * 0.65) * 4.0 + uTime * 1.15) *
-      cos((p.x - uPoint.x * 0.65) * 3.2 - uTime * 0.82);
 
-    float breathing = sin(uTime * 0.72 + p.y * 2.4) * 0.5 + 0.5;
-    float localPull = exp(-3.2 * distance(p.xy, uPoint * 0.78));
+    float breath =
+      sin(uTime * (0.55 + uCalm * 0.12) + p.y * 2.1) * 0.5 + 0.5;
+
+    float directedWave =
+      sin((p.y + uPoint.y * 0.72) * 4.0 + uTime * 1.05) *
+      cos((p.x - uPoint.x * 0.72) * 3.1 - uTime * 0.81);
+
+    float localPull = exp(-3.0 * distance(p.xy, uPoint * 0.82));
+    float remembered = noise3(p * 2.6 + vec3(uTime * 0.06, 0.0, 0.0)) - 0.5;
+
+    float bladeField =
+      pow(abs(sin(p.y * 7.5 + p.x * 5.0 + uTime * 0.55)), 10.0) *
+      sign(sin(p.x * 4.0 - p.z * 5.0 + uTime * 0.43));
+
+    float corruptionShape =
+      (remembered * 0.16 + bladeField * 0.20) *
+      smoothstep(0.28, 1.0, uCorruption);
+
     float displacement =
-      directional * (0.045 + uEnergy * 0.24) +
-      breathing * 0.025 +
-      localPull * uEnergy * 0.15;
+      breath * (0.018 + uCalm * 0.012) +
+      directedWave * (0.025 + uEnergy * 0.22) +
+      localPull * uEnergy * 0.17 +
+      remembered * uMemory * 0.09 +
+      corruptionShape;
 
     p += normal * displacement;
 
+    float lean = uCorruption * 0.08;
+    p.x += sin(p.y * 2.4 + uTime * 0.45) * lean;
+    p.y -= abs(p.x) * uCorruption * 0.035;
+
+    vBasePosition = position;
     vDisplace = displacement;
-    vEnergy = uEnergy;
+    vHeat = clamp(uEnergy * 0.72 + uMemory * 0.34 + uCorruption * 0.55, 0.0, 1.0);
     vNormalView = normalize(normalMatrix * normal);
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -55,28 +116,63 @@ const vertexShader = `
 const fragmentShader = `
   uniform float uTime;
   uniform float uEnergy;
-  uniform vec2 uPoint;
+  uniform float uMemory;
+  uniform float uCorruption;
+  uniform float uCalm;
 
   varying vec3 vNormalView;
+  varying vec3 vBasePosition;
   varying float vDisplace;
-  varying float vEnergy;
+  varying float vHeat;
+
+  float band(float value, float width) {
+    float f = abs(fract(value) - 0.5);
+    return 1.0 - smoothstep(0.0, width, f);
+  }
 
   void main() {
-    vec3 chalk = vec3(0.90, 0.86, 0.79);
-    vec3 clay = vec3(0.67, 0.29, 0.22);
-    vec3 ember = vec3(0.96, 0.47, 0.26);
-    vec3 wine = vec3(0.22, 0.07, 0.09);
+    vec3 pearl = vec3(0.93, 0.90, 0.82);
+    vec3 halo = vec3(0.94, 0.78, 0.49);
+    vec3 coral = vec3(0.90, 0.36, 0.23);
+    vec3 wine = vec3(0.27, 0.06, 0.09);
+    vec3 ash = vec3(0.045, 0.035, 0.032);
 
-    float edge = pow(1.0 - abs(vNormalView.z), 2.2);
-    float pulse = 0.5 + 0.5 * sin(uTime * 1.5 + vDisplace * 19.0);
-    float heat = clamp(vEnergy * 0.92 + max(vDisplace, 0.0) * 2.2, 0.0, 1.0);
+    float edge = pow(1.0 - abs(vNormalView.z), 2.0);
+    float innerPulse = 0.5 + 0.5 * sin(
+      uTime * (1.0 + uEnergy * 1.7) + vBasePosition.y * 4.0 + vDisplace * 16.0
+    );
 
-    vec3 base = mix(chalk, clay, heat * 0.66);
-    base = mix(base, ember, heat * pulse * 0.58);
-    base = mix(base, wine, edge * (0.24 + vEnergy * 0.24));
+    float veinA = band(
+      vBasePosition.y * 2.4 +
+      sin(vBasePosition.x * 4.5 + vBasePosition.z * 2.7) * 0.34 +
+      uTime * 0.018,
+      0.07
+    );
 
-    float glow = 0.88 + edge * 0.22 + heat * 0.16;
-    gl_FragColor = vec4(base * glow, 1.0);
+    float veinB = band(
+      vBasePosition.x * 3.2 -
+      cos(vBasePosition.y * 3.7 - vBasePosition.z * 3.1) * 0.25,
+      0.055
+    );
+
+    float veins = max(veinA, veinB);
+    float crack = veins * smoothstep(0.30, 0.88, uCorruption);
+    float scar = veins * uMemory * (1.0 - uCorruption * 0.45);
+
+    vec3 color = mix(pearl, halo, uMemory * 0.38 + innerPulse * uEnergy * 0.18);
+    color = mix(color, coral, vHeat * (0.22 + innerPulse * 0.34));
+    color = mix(color, wine, uCorruption * (0.42 + edge * 0.36));
+    color = mix(color, ash, uCorruption * uCorruption * (0.28 + edge * 0.45));
+
+    vec3 veinLight = mix(halo, coral, uCorruption);
+    color += veinLight * scar * (0.18 + uMemory * 0.42);
+    color = mix(color, ash, crack * (0.45 + uCorruption * 0.45));
+    color += coral * crack * innerPulse * uCorruption * 0.48;
+
+    float calmSheen = uCalm * (1.0 - uCorruption) * 0.12;
+    float glow = 0.86 + edge * 0.19 + vHeat * 0.14 + calmSheen;
+
+    gl_FragColor = vec4(color * glow, 1.0);
   }
 `;
 
@@ -94,37 +190,65 @@ function LivingMatter({
     const signal = signalRef.current;
     const material = materialRef.current;
     const mesh = meshRef.current;
+    const blendFast = Math.min(1, delta * 6.5);
+    const blendSlow = Math.min(1, delta * 2.1);
 
     if (material) {
       material.uniforms.uTime.value = clock.elapsedTime;
       material.uniforms.uEnergy.value = THREE.MathUtils.lerp(
         material.uniforms.uEnergy.value,
         signal.energy,
-        Math.min(1, delta * 7),
+        blendFast,
+      );
+      material.uniforms.uMemory.value = THREE.MathUtils.lerp(
+        material.uniforms.uMemory.value,
+        signal.memory,
+        blendSlow,
+      );
+      material.uniforms.uCorruption.value = THREE.MathUtils.lerp(
+        material.uniforms.uCorruption.value,
+        signal.corruption,
+        blendSlow,
+      );
+      material.uniforms.uCalm.value = THREE.MathUtils.lerp(
+        material.uniforms.uCalm.value,
+        signal.calm,
+        blendSlow,
       );
 
       targetPointRef.current.set(signal.x, signal.y);
-      material.uniforms.uPoint.value.lerp(
-        targetPointRef.current,
-        Math.min(1, delta * 5),
-      );
+      material.uniforms.uPoint.value.lerp(targetPointRef.current, blendFast);
     }
 
     if (mesh) {
+      const fall = signal.corruption;
       mesh.rotation.y = THREE.MathUtils.lerp(
         mesh.rotation.y,
-        signal.x * 0.58,
-        Math.min(1, delta * 3.4),
+        signal.x * (0.46 + fall * 0.28),
+        Math.min(1, delta * 3.3),
       );
       mesh.rotation.x = THREE.MathUtils.lerp(
         mesh.rotation.x,
-        -signal.y * 0.36,
-        Math.min(1, delta * 3.4),
+        -signal.y * 0.30 + fall * 0.16,
+        Math.min(1, delta * 3.1),
+      );
+      mesh.rotation.z = THREE.MathUtils.lerp(
+        mesh.rotation.z,
+        signal.x * fall * 0.18,
+        Math.min(1, delta * 2.2),
       );
 
-      const scale = 1 + signal.energy * 0.11;
-      targetScaleRef.current.set(scale, scale, scale);
-      mesh.scale.lerp(targetScaleRef.current, Math.min(1, delta * 4.4));
+      const scale =
+        1 +
+        signal.energy * 0.08 +
+        signal.memory * 0.035 -
+        signal.corruption * 0.025;
+      targetScaleRef.current.set(
+        scale * (1 - signal.corruption * 0.035),
+        scale * (1 + signal.calm * 0.025),
+        scale,
+      );
+      mesh.scale.lerp(targetScaleRef.current, Math.min(1, delta * 4.0));
     }
   });
 
@@ -136,6 +260,9 @@ function LivingMatter({
         uniforms={{
           uTime: { value: 0 },
           uEnergy: { value: 0 },
+          uMemory: { value: 0 },
+          uCorruption: { value: 0 },
+          uCalm: { value: 1 },
           uPoint: { value: new THREE.Vector2(0, 0) },
         }}
         vertexShader={vertexShader}
@@ -206,23 +333,28 @@ export default function Body01Experiment() {
     const context = new AudioContext();
     const master = context.createGain();
     const panner = context.createStereoPanner();
+    const filter = context.createBiquadFilter();
     const low = context.createOscillator();
     const overtone = context.createOscillator();
     const lowGain = context.createGain();
     const overtoneGain = context.createGain();
 
     low.type = "sine";
-    low.frequency.value = 86;
+    low.frequency.value = 92;
     overtone.type = "triangle";
-    overtone.frequency.value = 172;
+    overtone.frequency.value = 184;
 
-    lowGain.gain.value = 0.72;
-    overtoneGain.gain.value = 0.18;
-    master.gain.value = 0.004;
+    lowGain.gain.value = 0.75;
+    overtoneGain.gain.value = 0.15;
+    master.gain.value = 0.0035;
 
-    low.connect(lowGain).connect(master);
-    overtone.connect(overtoneGain).connect(master);
-    master.connect(panner).connect(context.destination);
+    filter.type = "lowpass";
+    filter.frequency.value = 1100;
+    filter.Q.value = 0.7;
+
+    low.connect(lowGain).connect(filter);
+    overtone.connect(overtoneGain).connect(filter);
+    filter.connect(master).connect(panner).connect(context.destination);
 
     low.start();
     overtone.start();
@@ -233,6 +365,7 @@ export default function Body01Experiment() {
       oscillators: [low, overtone],
       master,
       panner,
+      filter,
     };
   }, []);
 
@@ -309,40 +442,102 @@ export default function Body01Experiment() {
           ? 1 - (weightedY / weight / (height - 1)) * 2
           : signalRef.current.y * 0.92;
 
-      signalRef.current.energy = THREE.MathUtils.lerp(
-        signalRef.current.energy,
+      const signal = signalRef.current;
+
+      signal.energy = THREE.MathUtils.lerp(
+        signal.energy,
         targetEnergy,
-        targetEnergy > signalRef.current.energy ? 0.28 : 0.1,
+        targetEnergy > signal.energy ? 0.30 : 0.095,
       );
-      signalRef.current.x = THREE.MathUtils.lerp(
-        signalRef.current.x,
-        targetX,
-        0.16,
+      signal.x = THREE.MathUtils.lerp(signal.x, targetX, 0.16);
+      signal.y = THREE.MathUtils.lerp(signal.y, targetY, 0.16);
+
+      const calmTarget = targetEnergy < 0.055 ? 1 : 0;
+      signal.calm = THREE.MathUtils.lerp(signal.calm, calmTarget, 0.045);
+
+      const memoryGain = targetEnergy * 0.016;
+      const memoryDecay = 0.0014 + signal.calm * 0.0009;
+      signal.memory = THREE.MathUtils.clamp(
+        signal.memory + memoryGain - memoryDecay,
+        0,
+        1,
       );
-      signalRef.current.y = THREE.MathUtils.lerp(
-        signalRef.current.y,
-        targetY,
-        0.16,
-      );
+
+      if (targetEnergy > 0.24) {
+        const push =
+          (targetEnergy - 0.20) *
+          (0.007 + signal.memory * 0.0045);
+        signal.corruption = THREE.MathUtils.clamp(
+          signal.corruption + push,
+          0,
+          1,
+        );
+      } else {
+        const recovery =
+          0.0015 +
+          signal.calm * 0.0045 +
+          (signal.calm > 0.86 ? 0.002 : 0);
+        signal.corruption = THREE.MathUtils.clamp(
+          signal.corruption - recovery,
+          0,
+          1,
+        );
+      }
 
       const audio = audioRef.current;
       if (audio) {
         const now = audio.context.currentTime;
+        const corruption = signal.corruption;
+        const calm = signal.calm;
+        const memory = signal.memory;
+
         audio.master.gain.setTargetAtTime(
-          0.004 + signalRef.current.energy * 0.038,
+          0.003 +
+            signal.energy * 0.034 +
+            memory * 0.006 +
+            corruption * 0.005,
           now,
           0.08,
         );
+
         audio.panner.pan.setTargetAtTime(
-          THREE.MathUtils.clamp(signalRef.current.x * 0.82, -1, 1),
+          THREE.MathUtils.clamp(signal.x * (0.65 + corruption * 0.28), -1, 1),
           now,
           0.06,
         );
 
         const base =
-          82 + signalRef.current.energy * 24 + signalRef.current.y * 7;
-        audio.oscillators[0].frequency.setTargetAtTime(base, now, 0.09);
-        audio.oscillators[1].frequency.setTargetAtTime(base * 2.01, now, 0.09);
+          88 +
+          signal.energy * 22 +
+          signal.y * 6 -
+          corruption * 17 +
+          calm * 3;
+
+        audio.oscillators[0].frequency.setTargetAtTime(base, now, 0.11);
+        audio.oscillators[1].frequency.setTargetAtTime(
+          base * (2.0 + corruption * 0.028),
+          now,
+          0.09,
+        );
+        audio.oscillators[1].detune.setTargetAtTime(
+          corruption * 38 - calm * 3,
+          now,
+          0.12,
+        );
+
+        audio.filter.frequency.setTargetAtTime(
+          1350 -
+            corruption * 820 +
+            signal.energy * 460 +
+            calm * 180,
+          now,
+          0.10,
+        );
+        audio.filter.Q.setTargetAtTime(
+          0.7 + corruption * 5.0,
+          now,
+          0.14,
+        );
       }
 
       rafRef.current = requestAnimationFrame(analyzeFrame);
@@ -421,10 +616,11 @@ export default function Body01Experiment() {
 
       {status !== "live" ? (
         <section className={styles.gate}>
-          <div className={styles.kicker}>BODY://01</div>
+          <div className={styles.kicker}>BODY://01 · FALLEN LIGHT</div>
           <h1>NO BUTTONS</h1>
           <p className={styles.thesis}>
-            After entry, move. The world should understand the rest.
+            Move and it remembers. Push it and the material falls. Become still
+            and it can find another form.
           </p>
 
           <button
@@ -437,8 +633,8 @@ export default function Body01Experiment() {
           </button>
 
           <p className={styles.privacy}>
-            This slice analyzes low-resolution motion locally in your browser.
-            It does not upload or record the camera stream.
+            Motion is analyzed locally in your browser. The camera stream is
+            neither recorded nor uploaded by this experiment.
           </p>
 
           {status === "error" ? (
@@ -447,8 +643,8 @@ export default function Body01Experiment() {
         </section>
       ) : (
         <div className={styles.liveMark} aria-hidden="true">
-          <span>BODY://01</span>
-          <span>MOVE</span>
+          <span>FALLEN LIGHT</span>
+          <span>MOVE / THEN STOP</span>
         </div>
       )}
     </main>
